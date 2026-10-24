@@ -1,0 +1,17 @@
+{
+  "default": "local",
+  "profiles": {
+    "local": {
+      "base_url": "http://localhost:11434/v1",
+      "model": "YOUR_LOCAL_MODEL"
+    },
+    "cloud": {
+      "base_url": "https://YOUR_PROVIDER/v1",
+      "model": "YOUR_CLOUD_MODEL",
+      "api_key_env": "SHELL_BUDDY_API_KEY"
+    }
+  },
+  "debounce_ms": 150,
+  "max_tokens": 2048,
+  "timeout_ms": 8000
+}

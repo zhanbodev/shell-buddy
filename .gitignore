@@ -1,0 +1,7 @@
+.zig-cache/
+zig-out/
+.env*
+!.env.example
+__pycache__/
+.DS_Store
+restart.sh

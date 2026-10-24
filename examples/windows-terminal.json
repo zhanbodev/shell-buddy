@@ -1,0 +1,12 @@
+{
+  "actions": [
+    {
+      "command": { "action": "sendInput", "input": "\u001b[13;5u" },
+      "id": "User.ShellBuddyExecute",
+      "name": "Shell Buddy: execute"
+    }
+  ],
+  "keybindings": [
+    { "keys": "ctrl+enter", "id": "User.ShellBuddyExecute" }
+  ]
+}
