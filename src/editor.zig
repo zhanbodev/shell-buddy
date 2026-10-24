@@ -336,10 +336,15 @@ fn draw(term: *terminal.Terminal, view: ui.View, last: *?u64) !void {
     var w: std.Io.Writer = .fixed(&buffer);
     var frame = view;
     if (view.busy) frame.frame = @intCast(@divTrunc(now(term.io), 120));
-    try ui.render(&w, term.columns(), term.lineColumn(), frame);
+    const position = try ui.render(&w, term.columns(), term.lineColumn(), term.rows(), frame);
     const hash = std.hash.Wyhash.hash(0, w.buffered());
     if (last.* == null or last.*.? != hash) {
+        if (term.display_row > 0) {
+            var movement: [32]u8 = undefined;
+            try term.write(try std.fmt.bufPrint(&movement, "\x1b[{d}A", .{term.display_row}));
+        }
         try term.write(w.buffered());
+        term.display_row = position.row;
         last.* = hash;
     }
 }

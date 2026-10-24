@@ -830,7 +830,8 @@ if os.name != "nt":
             session.send("当前路径")
             session.wait_for("pwd")
             self.assertEqual(session.screen.y, row)
-            self.assertIn("✦ 当前路径  pwd", session.screen.display[row])
+            self.assertEqual(session.screen.display[row], "✦ 当前路径")
+            self.assertEqual(session.screen.display[row + 1], "  pwd")
             self.assertNotIn("Tab next", session.screen.display[row])
             self.assertEqual(session.screen.x, 10)
             self.assertIn(b"\x1b[36m", session.log)
@@ -1007,7 +1008,7 @@ if os.name != "nt":
                     session.wait_for("touch")
                     self.assertEqual(session.screen.y, row, session.screen.display)
                     self.assertTrue(session.screen.display[row].startswith("❯ ✦ 创建 hello.txt 文件"), session.screen.display)
-                    self.assertIn("touch './hello.txt'", session.screen.display[row])
+                    self.assertIn("touch './hello.txt'", session.screen.display[row + 1])
                     session.send(b"\r")
                     session.wait_for("touch './hello.txt'")
                     self.assertEqual(session.screen.y, row, session.screen.display)
@@ -1040,9 +1041,9 @@ if os.name != "nt":
                     session.wait_for("描述")
                     session.send(b"\r")
                     session.wait_for("✦")
-                    self.assertEqual(session.screen.y, row, session.screen.display)
+                    self.assertGreater(session.screen.y, row, session.screen.display)
                     self.assertTrue(session.screen.display[row].startswith("READY> ✦ "), session.screen.display)
-                    self.assertTrue(all(not line for line in session.screen.display[row + 1:]), session.screen.display)
+                    self.assertIn("很长的描述", session.screen.display[row + 1])
                     session.send(b"\x03")
                     session.wait_for("READY> ")
                     self.assertEqual(session.screen.display[row], "READY>", session.screen.display)
@@ -1138,9 +1139,73 @@ if os.name != "nt":
             # The compact line already fits at 16 columns, so resizing alone
             # need not emit an identical frame. Exercise cursor movement too.
             session.send(b"\x01\x05")
-            session.wait_screen(lambda screen: screen.columns == 80 and "pwd" in screen.display[screen.y] and screen.x == 10)
+            session.wait_screen(lambda screen: screen.columns == 80 and "pwd" in screen.display[screen.y + 1] and screen.x == 10)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
+
+        def test_split_window_wraps_description_and_candidate_but_accepts_full_command(self):
+            session = self.session()
+            session.wait_for("✦")
+            fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 24, 0, 0))
+            description = "创建 very-long-filename-for-split.txt 文件"
+            session.send("\x1b[200~" + description + "\x1b[201~")
+            session.wait_screen(lambda screen: screen.columns == 24 and screen.y > 0 and "touch" in screen.display[screen.y + 1])
+            cursor_row = session.screen.y
+            self.assertGreater(cursor_row, 0, session.screen.display)
+            self.assertTrue(session.screen.display[0].startswith("✦ 创建"), session.screen.display)
+            candidate = "".join(line[2:] for line in session.screen.display[cursor_row + 1:] if line)
+            self.assertEqual(candidate, "touch './very-long-filename-for-split.txt'")
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "touch './very-long-filename-for-split.txt'"))
+            self.assertTrue(all(not line for line in session.screen.display))
+            self.assertEqual(termios.tcgetattr(session.master), session.original)
+
+        def test_wrapped_chinese_cursor_edit_and_viewport_remain_bounded(self):
+            session = self.session()
+            session.wait_for("✦")
+            fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 6, 16, 0, 0))
+            description = "很长的中文描述" * 12
+            session.send("\x1b[200~" + description + "\x1b[201~")
+            session.wait_screen(lambda screen: screen.columns == 16 and screen.y > 0 and any("Model" in line for line in screen.display))
+            self.assertLess(session.screen.y, 5)
+            session.send(b"\x01")
+            session.wait_screen(lambda screen: screen.x == 2 and screen.y == 0 and screen.display[0].startswith("✦ 很长"))
+            session.send("新")
+            session.wait_screen(lambda screen: screen.display[0].startswith("✦ 新很长") and screen.x == 4)
+            session.send(b"\x1b")
+            self.assertEqual(session.result(), (20, "// 新" + description))
+            self.assertTrue(all(not line for line in session.screen.display))
+
+        def test_wrapped_candidate_reflows_on_resize_without_stale_rows(self):
+            session = self.session("// 创建 split-window-long-name.txt 文件")
+            session.wait_for("touch")
+            for columns, cursor_row in ((20, 2), (32, 1), (80, 0)):
+                fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, columns, 0, 0))
+                session.send(b"\x01\x05")
+                session.wait_screen(lambda screen: screen.columns == columns and screen.y == cursor_row and "touch" in screen.display[screen.y + 1])
+                candidate = "".join(line[2:] for line in session.screen.display[session.screen.y + 1:] if line)
+                self.assertEqual(candidate, "touch './split-window-long-name.txt'", session.screen.display)
+            self.assertEqual(session.screen.display[0], "✦ 创建 split-window-long-name.txt 文件")
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "touch './split-window-long-name.txt'"))
+            self.assertTrue(all(not line for line in session.screen.display))
+
+        def test_native_prompt_survives_bottom_scroll_and_candidate_cleanup(self):
+            for binary, flags, shell, prompt in self.supported_shells():
+                with self.subTest(shell=shell):
+                    session = self.start_shell(binary, flags, shell, prompt)
+                    session.send("printf '\\n%.0s' {1..30} >&2\n")
+                    session.wait_screen(lambda screen: screen.y == 23 and screen.display[-1] == "READY>")
+                    session.send("//当前路径")
+                    session.wait_screen(lambda screen: any("pwd" in line for line in screen.display) and "✦ 当前路径" in screen.display[screen.y])
+                    row = session.screen.y
+                    self.assertEqual(session.screen.display[row], "READY> ✦ 当前路径")
+                    self.assertEqual(session.screen.display[row + 1], "  pwd")
+                    session.send(b"\r")
+                    session.wait_screen(lambda screen: screen.display[screen.y] == "READY> pwd")
+                    self.assertTrue(all(not line for line in session.screen.display[session.screen.y + 1:]))
+                    session.send(b"\x15exit\n")
+                    self.assertEqual(session.result()[0], 0)
 
         def test_tab_requests_alternative_without_replacing_local_result_early(self):
             self.configure("slow")

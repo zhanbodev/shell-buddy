@@ -61,6 +61,9 @@ pub const Terminal = struct {
     surrogate: u16 = 0,
     inline_saved: bool = false,
     inline_column: ?usize = null,
+    display_row: usize = 0,
+    restore_rows: usize = 0,
+    restore_column: usize = 0,
     pending: [1024]u8 = undefined,
     pending_len: usize = 0,
     pending_offset: usize = 0,
@@ -113,15 +116,23 @@ pub const Terminal = struct {
     }
     pub fn close(self: *Terminal) void {
         self.write("\x1b[0m\x1b[?2004l") catch {};
-        if (self.inline_saved) {
-            if (self.inline_column != null) {
-                var buffer: [48]u8 = undefined;
-                const column = self.lineColumn();
-                self.write(if (column > 0) (std.fmt.bufPrint(&buffer, "\r\x1b[{d}C\x1b[K", .{column}) catch "") else "\r\x1b[K") catch {};
-            }
-            // Restore the cursor expected by the suspended native line editor.
+        if (self.inline_saved and self.inline_column == null) {
             self.write("\x1b8") catch {};
-        } else self.write("\r\x1b[2K") catch {};
+        } else {
+            var buffer: [96]u8 = undefined;
+            if (self.display_row > 0) self.write(std.fmt.bufPrint(&buffer, "\x1b[{d}A", .{self.display_row}) catch "") catch {};
+            self.write("\r") catch {};
+            const column = self.lineColumn();
+            if (column > 0) self.write(std.fmt.bufPrint(&buffer, "\x1b[{d}C", .{column}) catch "") catch {};
+            self.write("\x1b[J") catch {};
+            if (self.inline_saved and self.inline_column != null) {
+                // Reconstruct the native editor's cursor relative to our anchor.
+                // ESC 8 would restore a stale screen row after output scrolls.
+                if (self.restore_rows > 0) self.write(std.fmt.bufPrint(&buffer, "\x1b[{d}B", .{self.restore_rows}) catch "") catch {};
+                self.write("\r") catch {};
+                if (self.restore_column > 0) self.write(std.fmt.bufPrint(&buffer, "\x1b[{d}C", .{self.restore_column}) catch "") catch {};
+            }
+        }
         if (windows) {
             _ = Win.SetConsoleMode(self.input.handle, self.original);
             _ = Win.SetConsoleMode(self.output.handle, self.original_output);
@@ -222,6 +233,17 @@ pub const Terminal = struct {
         return 80;
     }
 
+    pub fn rows(self: *Terminal) usize {
+        if (windows) {
+            var info: Win.Info = undefined;
+            if (Win.GetConsoleScreenBufferInfo(self.output.handle, &info) != 0) return @intCast(@max(3, info.window.bottom - info.window.top + 1));
+        } else {
+            var size: std.posix.winsize = .{ .row = 0, .col = 0, .xpixel = 0, .ypixel = 0 };
+            if (std.posix.system.ioctl(self.input.handle, std.posix.T.IOCGWINSZ, @intFromPtr(&size)) == 0 and size.row >= 3) return size.row;
+        }
+        return 24;
+    }
+
     pub fn lineColumn(self: *Terminal) usize {
         return @min(self.inline_column orelse 0, self.columns() -| 4);
     }
@@ -251,13 +273,15 @@ pub const Terminal = struct {
         };
         const width = self.columns();
         const start = (column + width - left_width % width) % width;
-        const rows = (start + left_width) / width;
+        const wrapped_rows = (start + left_width) / width;
         var buffer: [80]u8 = undefined;
-        if (rows > 0) try self.write(try std.fmt.bufPrint(&buffer, "\x1b[{d}A", .{rows}));
+        if (wrapped_rows > 0) try self.write(try std.fmt.bufPrint(&buffer, "\x1b[{d}A", .{wrapped_rows}));
         try self.write("\r");
         if (start > 0) try self.write(try std.fmt.bufPrint(&buffer, "\x1b[{d}C", .{start}));
-        try self.write(if (rows > 0) "\x1b[J" else "\x1b[K");
+        try self.write(if (wrapped_rows > 0) "\x1b[J" else "\x1b[K");
         self.inline_column = start;
+        self.restore_rows = wrapped_rows;
+        self.restore_column = column;
     }
 };
 
