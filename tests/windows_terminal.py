@@ -149,6 +149,8 @@ $result | ConvertTo-Json -Depth 5 -Compress
         self.configure("cd")
         target = self.directory / "target directory"
         target.mkdir()
+        # PowerShell expands Windows' 8.3 TEMP path when reporting its location.
+        target = target.resolve()
         Handler.target = str(target)
         process = self.start_shell()
         # Wait for the child editor to own console input before typing the intent.
