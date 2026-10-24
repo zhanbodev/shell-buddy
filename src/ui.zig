@@ -9,6 +9,8 @@ pub const View = struct {
     ready: bool = false,
     busy: bool = false,
     frame: usize = 0,
+    turn: ?usize = null,
+    icon: core.Icon = .star,
 };
 
 const accent = "\x1b[36m";
@@ -25,10 +27,10 @@ pub fn render(w: *std.Io.Writer, columns: usize, column: usize, rows: usize, vie
     var lines: [2048]Line = undefined;
     var count: usize = 0;
     var cursor_row: usize = 0;
-    var cursor_column: usize = column + 2;
+    var cursor_column: usize = column + 3;
     var start: usize = 0;
     var offset: usize = 0;
-    var x = column + 2;
+    var x = column + 3;
     var indent = x;
     while (offset < view.text.len) {
         const after = core.next(view.text, offset);
@@ -37,7 +39,7 @@ pub fn render(w: *std.Io.Writer, columns: usize, column: usize, rows: usize, vie
             lines[count] = .{ .text = view.text[start..offset], .column = indent, .color = reset, .marker = count == 0 };
             count += 1;
             start = offset;
-            x = column + 2;
+            x = column + 3;
             indent = x;
         }
         if (offset == view.cursor) {
@@ -77,11 +79,15 @@ pub fn render(w: *std.Io.Writer, columns: usize, column: usize, rows: usize, vie
         if (left > 0) try w.print("\x1b[{d}C", .{left});
         if (marker) {
             try w.writeAll(if (view.notice != null) warning else accent);
-            if (view.busy and view.notice == null) {
+            if (view.busy and view.turn == null and view.notice == null) {
                 const phase = view.frame % 16;
                 try w.writeAll(if (phase < 4 or phase >= 14) "\x1b[2m" else if (phase >= 7 and phase < 11) "\x1b[1m" else "\x1b[22m");
             }
-            try w.writeAll("✦ " ++ reset);
+            // Text terminals cannot transform glyphs. An eight-frame orbit
+            // occupies the star's cell for exactly one revolution, then restores it.
+            const orbit = [_][]const u8{ "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" };
+            try w.writeAll(if (view.turn) |frame| orbit[frame % orbit.len] else if (view.icon == .lizard) "\u{f5000}" else "✦");
+            try w.writeAll("  " ++ reset);
         }
         try w.writeAll(line.color);
         // Truncation is visual only; accepting always returns the full command.

@@ -1,3 +1,4 @@
+pub const Icon = enum { star, lizard };
 const std = @import("std");
 pub const max_command = 4096;
 pub const Shell = enum { bash, zsh, powershell };

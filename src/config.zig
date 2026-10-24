@@ -16,6 +16,7 @@ pub const Config = struct {
     debounce_ms: u32 = 150,
     timeout_ms: u32 = 8000,
     max_tokens: u32 = 2048,
+    icon: core.Icon = .star,
     config_path: []const u8,
     cache_path: []const u8,
     state_path: []const u8 = "",
@@ -76,6 +77,14 @@ fn parse(a: std.mem.Allocator, initial: Config, bytes: []const u8) Config {
         return cfg;
     }
     const obj = parsed.value.object;
+    // The removed nerd_font field never enables a custom font implicitly.
+    if (obj.get("icon")) |v| {
+        if (v != .string or (!std.mem.eql(u8, v.string, "star") and !std.mem.eql(u8, v.string, "lizard"))) {
+            cfg.problem = "icon must be 'star' or 'lizard'";
+            return cfg;
+        }
+        cfg.icon = if (std.mem.eql(u8, v.string, "lizard")) .lizard else .star;
+    }
     if (obj.get("max_tokens")) |v| {
         if (v != .integer or v.integer < 1 or v.integer > 32768) {
             cfg.problem = "max_tokens must be an integer between 1 and 32768";
@@ -200,7 +209,7 @@ pub fn readProfile(a: std.mem.Allocator, io: std.Io, path: []const u8, name: []c
 
 // Re-read under the same lock used by `llm` so configuring one profile cannot
 // overwrite another terminal's changes. Validate before committing either file.
-pub fn saveProfile(a: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, name: []const u8, profile: Profile, key: ?[]const u8) !Config {
+pub fn saveProfile(a: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, name: []const u8, profile: Profile, key: ?[]const u8, icon: core.Icon) !Config {
     if (!validSelection(name)) return error.InvalidProfile;
     var cfg = try paths(a, env);
     try private.parent(a, io, cfg.config_path);
@@ -214,6 +223,8 @@ pub fn saveProfile(a: std.mem.Allocator, io: std.Io, env: *const std.process.Env
     const parsed = std.json.parseFromSlice(std.json.Value, a, original, .{ .allocate = .alloc_always }) catch return error.InvalidConfiguration;
     if (parsed.value != .object) return error.InvalidConfiguration;
     var root = parsed.value;
+    try root.object.put(a, "icon", .{ .string = @tagName(icon) });
+    _ = root.object.orderedRemove("nerd_font");
     if (!root.object.contains("max_tokens")) try root.object.put(a, "max_tokens", .{ .integer = 2048 });
     var profiles = root.object.get("profiles") orelse std.json.Value{ .object = .empty };
     if (profiles != .object) return error.InvalidConfiguration;
@@ -245,6 +256,7 @@ pub const example =
     \\    "local": {"base_url": "http://localhost:11434/v1", "model": "YOUR_LOCAL_MODEL"},
     \\    "cloud": {"base_url": "https://YOUR_PROVIDER/v1", "model": "YOUR_CLOUD_MODEL", "api_key_env": "SHELL_BUDDY_API_KEY"}
     \\  },
+    \\  "icon": "star",
     \\  "debounce_ms": 150,
     \\  "max_tokens": 2048,
     \\  "timeout_ms": 8000

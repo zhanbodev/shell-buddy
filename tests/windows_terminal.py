@@ -29,6 +29,8 @@ class PowerShellTests(Base):
         process.write("normal\r")
         self.wait_for("API key (hidden, required): ")
         process.write("dummy-windows-secret\r")
+        self.wait_for("Terminal icon: ")
+        process.write("\r")
         self.wait_for("READY>")
         self.assertIn("Configuration reloaded", self.log)
         self.assertNotIn("dummy-windows-secret", self.log)
@@ -130,7 +132,10 @@ $result | ConvertTo-Json -Depth 5 -Compress
 
     def test_enter_fills_line_then_second_enter_executes(self):
         process = self.start_shell()
-        process.write("// 创建 hello.txt 文件")
+        # Wait for the child editor to own console input before typing the intent.
+        process.write("//")
+        self.wait_for("✦")
+        process.write(" 创建 hello.txt 文件")
         self.wait_for("New-Item")
         self.assertIn("✦", re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", self.log))
         process.write("\r")
@@ -146,7 +151,10 @@ $result | ConvertTo-Json -Depth 5 -Compress
         target.mkdir()
         Handler.target = str(target)
         process = self.start_shell()
-        process.write("// 切换测试目录")
+        # Wait for the child editor to own console input before typing the intent.
+        process.write("//")
+        self.wait_for("✦")
+        process.write(" 切换测试目录")
         self.wait_for("Set-Location")
         process.write("\x1b[13;5u")
         self.wait_for("READY>")
@@ -156,7 +164,10 @@ $result | ConvertTo-Json -Depth 5 -Compress
     def test_slow_model_cancel_and_unicode_rule(self):
         self.configure("slow")
         process = self.start_shell()
-        process.write("// 流式测试")
+        # Wait for the child editor to own console input before typing the intent.
+        process.write("//")
+        self.wait_for("✦")
+        process.write(" 流式测试")
         self.wait_for("touch")
         process.write("\x15当前路径")
         self.wait_for("Get-Location")

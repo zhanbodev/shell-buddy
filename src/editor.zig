@@ -91,6 +91,8 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
     var pasting = false;
     var last_hash: ?u64 = null;
     var checked_at = now(io);
+    var turn_started: ?i64 = null;
+    var replacing = false;
 
     while (true) {
         if (term.wasInterrupted()) return .{ .action = .cancel, .text = "" };
@@ -115,6 +117,8 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
                     settings = pending;
                     cfg = next;
                     candidates = .{};
+                    replacing = false;
+                    turn_started = null;
                     revision +%= 1;
                     changed = true;
                     requested = false;
@@ -139,6 +143,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             if (preview.done) {
                 f.await(io);
                 future = null;
+                replacing = false;
                 if (preview.revision == revision) {
                     if (preview.failure) |err| {
                         status = model.message(err);
@@ -153,6 +158,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             } else if (now(io) - started_at >= cfg.timeout_ms) {
                 f.cancel(io);
                 future = null;
+                replacing = false;
                 status = model.message(error.Timeout);
                 preview = .{};
             }
@@ -164,7 +170,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             } else {
                 job = makeJob(init, cfg, shell, cwd) catch |err| {
                     status = model.message(err);
-                    try draw(&term, .{ .text = text[0..len], .cursor = cursor, .notice = status }, &last_hash);
+                    try draw(&term, .{ .text = text[0..len], .cursor = cursor, .notice = status, .icon = cfg.icon }, &last_hash);
                     continue;
                 };
                 @memcpy(job.input[0..len], text[0..len]);
@@ -175,7 +181,13 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
                 status = null;
             }
         }
-        const suggestion = candidates.get() orelse p: {
+        const turn: ?usize = if (turn_started) |start| value: {
+            const elapsed = now(io) - start;
+            if (elapsed < 480) break :value @intCast(@divTrunc(elapsed, 60));
+            turn_started = null;
+            break :value null;
+        } else null;
+        const suggestion = (if (replacing) @as(?[]const u8, null) else candidates.get()) orelse p: {
             if (future != null and preview.len > 0) {
                 const raw = std.mem.trim(u8, preview.bytes[0..preview.len], " \t\r\n");
                 if (core.validText(raw)) break :p raw;
@@ -185,9 +197,11 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
         try draw(&term, .{
             .text = text[0..len],
             .cursor = cursor,
-            .suggestion = suggestion,
-            .notice = status,
-            .ready = candidates.get() != null,
+            .suggestion = if (turn != null) null else suggestion,
+            .notice = if (turn != null) null else status,
+            .ready = !replacing and candidates.get() != null,
+            .turn = turn,
+            .icon = cfg.icon,
             .busy = future != null,
         }, &last_hash);
 
@@ -260,23 +274,30 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
                     pasting = true;
                 },
                 .paste_end, .ignore => {},
-                .escape => return .{ .action = .cancel, .text = try std.fmt.allocPrint(a, "// {s}", .{text[0..len]}) },
+                .escape => return .{ .action = .cancel, .text = if (len == 0) "" else try std.fmt.allocPrint(a, "// {s}", .{text[0..len]}) },
                 .cancel => return .{ .action = .cancel, .text = "" },
-                .enter, .execute => if (candidates.get()) |ready| {
-                    const state = try control.read(init.gpa, io, cfg.state_path);
-                    if (!state.enabled) return .{ .action = .cancel, .text = try std.fmt.allocPrint(a, "// {s}", .{text[0..len]}) };
-                    if (state.revision != observed.revision) {
-                        checked_at = 0;
-                        continue;
+                .enter, .execute => {
+                    // Never accept a hidden candidate during a Tab refresh.
+                    if (replacing or turn != null) continue;
+                    if (candidates.get()) |ready| {
+                        const state = try control.read(init.gpa, io, cfg.state_path);
+                        if (!state.enabled) return .{ .action = .cancel, .text = try std.fmt.allocPrint(a, "// {s}", .{text[0..len]}) };
+                        if (state.revision != observed.revision) {
+                            checked_at = 0;
+                            continue;
+                        }
+                        const value = try a.dupe(u8, ready);
+                        const cache_key = cache.key(shell, cwd, text[0..len], cfg);
+                        // Cache errors cannot prevent accepting a command.
+                        cache.save(a, io, cfg.cache_path, &cache_key, value) catch {};
+                        return .{ .action = if (key == .execute) .execute else .accept, .text = value };
                     }
-                    const value = try a.dupe(u8, ready);
-                    const cache_key = cache.key(shell, cwd, text[0..len], cfg);
-                    // Cache errors cannot prevent accepting a command.
-                    cache.save(a, io, cfg.cache_path, &cache_key, value) catch {};
-                    return .{ .action = if (key == .execute) .execute else .accept, .text = value };
                 },
                 .tab => {
                     if (core.intent(text[0..len]).len == 0) continue;
+                    turn_started = now(io);
+                    status = null;
+                    if (future != null) replacing = true;
                     if (future == null) {
                         if (candidates.len > 0 and candidates.current + 1 < candidates.len) {
                             candidates.current += 1;
@@ -297,6 +318,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
                             started_at = now(io);
                             requested = true;
                             future = try io.concurrent(model.Job.run, .{&job});
+                            replacing = true;
                             status = null;
                         }
                     }
@@ -304,6 +326,8 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             }
         }
         if (modified) {
+            replacing = false;
+            turn_started = null;
             if (future) |*f| {
                 f.cancel(io);
                 future = null;

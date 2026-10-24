@@ -183,6 +183,21 @@ class CLI(Base):
         self.assertIn("environment variable name", result.stdout)
         self.assertNotIn("dummy-misplaced-secret", result.stdout + result.stderr)
 
+    def test_icon_defaults_validation_and_legacy_font_migration(self):
+        self.assertIn("icon: star", self.run_cli("doctor").stdout)
+        self.assertEqual(json.loads(self.run_cli("config-example").stdout)["icon"], "star")
+        path = self.directory / "config.json"
+        path.write_text(json.dumps({"nerd_font": True}))
+        self.assertIn("icon: star", self.run_cli("doctor").stdout)
+        for value in ("star", "lizard"):
+            path.write_text(json.dumps({"icon": value}))
+            self.assertIn("icon: " + value, self.run_cli("doctor").stdout)
+        for value in (False, True, "nerd", "dinosaur", 0, None, [], {}):
+            path.write_text(json.dumps({"icon": value}))
+            result = self.run_cli("restart")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("icon must be 'star' or 'lizard'", result.stderr)
+
     def test_saved_credentials_are_profile_scoped_and_environment_takes_priority(self):
         self.configure()
         path = self.directory / "config.json"
@@ -669,11 +684,14 @@ if os.name != "nt":
             session.send("test-model:latest\r")
             session.wait_for("API key (hidden, optional): ")
             session.send("\r")
+            session.wait_for("Terminal icon: ")
+            session.send("\r")
             self.assertEqual(session.result(), (0, ""))
             self.assertEqual(termios.tcgetattr(session.master), session.original)
             value = json.loads(path.read_text())
             self.assertEqual(value["default"], "local")
             self.assertEqual(value["max_tokens"], 2048)
+            self.assertEqual(value["icon"], "star")
             self.assertEqual(value["profiles"]["local"]["model"], "test-model:latest")
             self.assertEqual(value["profiles"]["local"]["base_url"], "http://localhost:11434/v1")
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
@@ -685,6 +703,8 @@ if os.name != "nt":
             session = self.start_setup()
             self.cloud_key_step(session)
             session.send("dummy-onboard-secret\r")
+            session.wait_for("Terminal icon: ")
+            session.send("\r")
             self.assertEqual(session.result(), (0, ""))
             self.assertEqual(termios.tcgetattr(session.master), session.original)
             self.assertNotIn(b"dummy-onboard-secret", session.log)
@@ -718,6 +738,7 @@ if os.name != "nt":
             value["profiles"]["cloud"] = dict(local, api_key_env="dummy-misplaced-secret")
             value["default"] = "cloud"
             value["extra"] = "preserve-me"
+            value["nerd_font"] = True
             value["max_tokens"] = 4096
             path.write_text(json.dumps(value))
             store = self.directory / "credentials.json"
@@ -731,10 +752,14 @@ if os.name != "nt":
             session.send("\r")
             session.wait_for("API key (hidden, Enter to keep): ")
             session.send("\r")
+            session.wait_for("Terminal icon: ")
+            session.send("\r")
             self.assertEqual(session.result(), (0, ""))
             updated = json.loads(path.read_text())
             self.assertEqual(updated["profiles"]["local"], local)
             self.assertEqual(updated["extra"], "preserve-me")
+            self.assertNotIn("nerd_font", updated)
+            self.assertEqual(updated["icon"], "star")
             self.assertEqual(updated["max_tokens"], 4096)
             self.assertEqual(updated["profiles"]["cloud"]["api_key_env"], "SHELL_BUDDY_API_KEY")
             self.assertNotIn(b"dummy-misplaced-secret", session.log)
@@ -745,6 +770,8 @@ if os.name != "nt":
             session.send("\r\r\r")
             session.wait_for("API key (hidden, Enter to keep): ")
             session.send("dummy-rotated-key\r")
+            session.wait_for("Terminal icon: ")
+            session.send("\r")
             self.assertEqual(session.result(), (0, ""))
             self.assertEqual(json.loads(store.read_text()), {"local": "dummy-local-key", "cloud": "dummy-rotated-key"})
 
@@ -768,10 +795,36 @@ if os.name != "nt":
             self.assertFalse(writer.is_alive())
             self.assertFalse(self.directory.joinpath("credentials.json").exists())
             session.send("dummy-valid-key\r")
+            session.wait_for("Terminal icon: ")
+            session.send("\r")
             self.assertEqual(session.result(), (0, ""))
             self.assertNotIn(b"dummy-pasted", session.log)
             self.assertNotIn(b"wrong-line", session.log)
             self.assertEqual(json.loads(self.directory.joinpath("credentials.json").read_text()), {"cloud": "dummy-valid-key"})
+
+        def test_icon_selection_is_explicit_preserved_and_cancel_saves_nothing(self):
+            self.configure()
+            path = self.directory / "config.json"
+            original = path.read_bytes()
+            session = self.start_setup()
+            session.send("\r\r\r\r")
+            session.wait_for("Terminal icon: ")
+            session.send(b"\t\x1b")
+            self.assertEqual(session.result(), (130, ""))
+            self.assertEqual(path.read_bytes(), original)
+            session = self.start_setup()
+            session.send("\r\r\r\r")
+            session.wait_for("Terminal icon: ")
+            session.send(b"\t\r")
+            self.assertEqual(session.result(), (0, ""))
+            self.assertEqual(json.loads(path.read_text())["icon"], "lizard")
+            session = self.start_setup()
+            session.send("\r\r\r\r")
+            session.wait_for("Terminal icon: ")
+            session.wait_screen(lambda screen: "lizard" in screen.display[screen.y])
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, ""))
+            self.assertEqual(json.loads(path.read_text())["icon"], "lizard")
 
         def test_invalid_store_is_not_overwritten_by_setup(self):
             self.configure()
@@ -809,6 +862,19 @@ if os.name != "nt":
             self.addCleanup(session.close)
             return session
 
+        def test_star_fallback_and_hot_reload_preserve_cursor_and_candidate(self):
+            path = self.directory / "config.json"
+            path.write_text(json.dumps({"icon": "star"}))
+            session = self.session("// 当前路径")
+            session.wait_screen(lambda screen: screen.display[0] == "✦  当前路径" and "pwd" in screen.display[1])
+            self.assertEqual(session.screen.x, 11)
+            path.write_text(json.dumps({"icon": "lizard"}))
+            self.assertEqual(self.run_cli("restart").returncode, 0)
+            session.wait_screen(lambda screen: screen.display[0] == "\U000f5000  当前路径" and "pwd" in screen.display[1])
+            self.assertEqual(session.screen.x, 11)
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "pwd"))
+
         def test_compression_failure_and_rate_limit_have_distinct_hints(self):
             for mode, hint in (("force-compression", "Unsupported response compression"),
                                ("rate", "Rate limited")):
@@ -816,7 +882,7 @@ if os.name != "nt":
                     self.configure(mode)
                     session = self.session("// 测试服务")
                     session.wait_for(hint)
-                    self.assertTrue(session.screen.display[session.screen.y].startswith("✦ 测试服务"))
+                    self.assertTrue(session.screen.display[session.screen.y].startswith("✦  测试服务"))
                     self.assertNotIn(b"Model request failed", session.log)
                     session.send(b"\x03")
                     self.assertEqual(session.result(), (20, ""))
@@ -830,10 +896,10 @@ if os.name != "nt":
             session.send("当前路径")
             session.wait_for("pwd")
             self.assertEqual(session.screen.y, row)
-            self.assertEqual(session.screen.display[row], "✦ 当前路径")
+            self.assertEqual(session.screen.display[row], "✦  当前路径")
             self.assertEqual(session.screen.display[row + 1], "  pwd")
             self.assertNotIn("Tab next", session.screen.display[row])
-            self.assertEqual(session.screen.x, 10)
+            self.assertEqual(session.screen.x, 11)
             self.assertIn(b"\x1b[36m", session.log)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
@@ -1007,7 +1073,7 @@ if os.name != "nt":
                     session.send("创建 hello.txt 文件")
                     session.wait_for("touch")
                     self.assertEqual(session.screen.y, row, session.screen.display)
-                    self.assertTrue(session.screen.display[row].startswith("❯ ✦ 创建 hello.txt 文件"), session.screen.display)
+                    self.assertTrue(session.screen.display[row].startswith("❯ ✦  创建 hello.txt 文件"), session.screen.display)
                     self.assertIn("touch './hello.txt'", session.screen.display[row + 1])
                     session.send(b"\r")
                     session.wait_for("touch './hello.txt'")
@@ -1042,7 +1108,7 @@ if os.name != "nt":
                     session.send(b"\r")
                     session.wait_for("✦")
                     self.assertGreater(session.screen.y, row, session.screen.display)
-                    self.assertTrue(session.screen.display[row].startswith("READY> ✦ "), session.screen.display)
+                    self.assertTrue(session.screen.display[row].startswith("READY> ✦  "), session.screen.display)
                     self.assertIn("很长的描述", session.screen.display[row + 1])
                     session.send(b"\x03")
                     session.wait_for("READY> ")
@@ -1120,6 +1186,20 @@ if os.name != "nt":
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
 
+        def test_esc_after_trigger_clears_shell_input(self):
+            for binary, flags, shell, prompt in self.supported_shells():
+                with self.subTest(shell=shell):
+                    session = self.start_shell(binary, flags, shell, prompt)
+                    session.send("//")
+                    session.wait_for("✦")
+                    session.send(b"\x1b")
+                    session.wait_screen(lambda screen: screen.display[screen.y] == "READY>")
+                    session.send("printf '%s%s\\n' ESC_ CLEARED\n")
+                    session.send("exit\n")
+                    code, stdout = session.result()
+                    self.assertEqual(code, 0)
+                    self.assertIn("ESC_CLEARED", stdout)
+
         def test_paste_newline_is_text_and_esc_keeps_description(self):
             session = self.session()
             session.wait_for("✦")
@@ -1133,13 +1213,13 @@ if os.name != "nt":
             session.wait_for("当前路径你")
             fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 16, 0, 0))
             session.send(b"\x7f")
-            session.wait_screen(lambda screen: screen.columns == 16 and screen.display[screen.y].startswith("✦ 当前路径"))
-            self.assertEqual(session.screen.x, 10)
+            session.wait_screen(lambda screen: screen.columns == 16 and screen.display[screen.y].startswith("✦  当前路径"))
+            self.assertEqual(session.screen.x, 11)
             fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
             # The compact line already fits at 16 columns, so resizing alone
             # need not emit an identical frame. Exercise cursor movement too.
             session.send(b"\x01\x05")
-            session.wait_screen(lambda screen: screen.columns == 80 and "pwd" in screen.display[screen.y + 1] and screen.x == 10)
+            session.wait_screen(lambda screen: screen.columns == 80 and "pwd" in screen.display[screen.y + 1] and screen.x == 11)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
 
@@ -1152,7 +1232,7 @@ if os.name != "nt":
             session.wait_screen(lambda screen: screen.columns == 24 and screen.y > 0 and "touch" in screen.display[screen.y + 1])
             cursor_row = session.screen.y
             self.assertGreater(cursor_row, 0, session.screen.display)
-            self.assertTrue(session.screen.display[0].startswith("✦ 创建"), session.screen.display)
+            self.assertTrue(session.screen.display[0].startswith("✦  创建"), session.screen.display)
             candidate = "".join(line[2:] for line in session.screen.display[cursor_row + 1:] if line)
             self.assertEqual(candidate, "touch './very-long-filename-for-split.txt'")
             session.send(b"\r")
@@ -1169,9 +1249,9 @@ if os.name != "nt":
             session.wait_screen(lambda screen: screen.columns == 16 and screen.y > 0 and any("Model" in line for line in screen.display))
             self.assertLess(session.screen.y, 5)
             session.send(b"\x01")
-            session.wait_screen(lambda screen: screen.x == 2 and screen.y == 0 and screen.display[0].startswith("✦ 很长"))
+            session.wait_screen(lambda screen: screen.x == 3 and screen.y == 0 and screen.display[0].startswith("✦  很长"))
             session.send("新")
-            session.wait_screen(lambda screen: screen.display[0].startswith("✦ 新很长") and screen.x == 4)
+            session.wait_screen(lambda screen: screen.display[0].startswith("✦  新很长") and screen.x == 5)
             session.send(b"\x1b")
             self.assertEqual(session.result(), (20, "// 新" + description))
             self.assertTrue(all(not line for line in session.screen.display))
@@ -1185,7 +1265,7 @@ if os.name != "nt":
                 session.wait_screen(lambda screen: screen.columns == columns and screen.y == cursor_row and "touch" in screen.display[screen.y + 1])
                 candidate = "".join(line[2:] for line in session.screen.display[session.screen.y + 1:] if line)
                 self.assertEqual(candidate, "touch './split-window-long-name.txt'", session.screen.display)
-            self.assertEqual(session.screen.display[0], "✦ 创建 split-window-long-name.txt 文件")
+            self.assertEqual(session.screen.display[0], "✦  创建 split-window-long-name.txt 文件")
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "touch './split-window-long-name.txt'"))
             self.assertTrue(all(not line for line in session.screen.display))
@@ -1197,9 +1277,9 @@ if os.name != "nt":
                     session.send("printf '\\n%.0s' {1..30} >&2\n")
                     session.wait_screen(lambda screen: screen.y == 23 and screen.display[-1] == "READY>")
                     session.send("//当前路径")
-                    session.wait_screen(lambda screen: any("pwd" in line for line in screen.display) and "✦ 当前路径" in screen.display[screen.y])
+                    session.wait_screen(lambda screen: any("pwd" in line for line in screen.display) and "✦  当前路径" in screen.display[screen.y])
                     row = session.screen.y
-                    self.assertEqual(session.screen.display[row], "READY> ✦ 当前路径")
+                    self.assertEqual(session.screen.display[row], "READY> ✦  当前路径")
                     self.assertEqual(session.screen.display[row + 1], "  pwd")
                     session.send(b"\r")
                     session.wait_screen(lambda screen: screen.display[screen.y] == "READY> pwd")
@@ -1207,14 +1287,69 @@ if os.name != "nt":
                     session.send(b"\x15exit\n")
                     self.assertEqual(session.result()[0], 0)
 
-        def test_tab_requests_alternative_without_replacing_local_result_early(self):
+        def test_tab_clears_candidate_turns_once_and_blocks_hidden_acceptance(self):
             self.configure("slow")
             session = self.session("// 当前路径")
             session.wait_for("pwd")
+            row, column = session.screen.y, session.screen.x
+            requests = len(Handler.requests)
             session.send(b"\t")
-            time.sleep(0.1)
+            orbit = "⣾⣽⣻⢿⡿⣟⣯⣷"
+            session.wait_screen(lambda screen: any(frame in screen.display[row] for frame in orbit) and all(not line for line in screen.display[row + 1:]))
+            self.assertEqual((session.screen.y, session.screen.x), (row, column))
+            # Both acceptance keys must ignore the now-hidden previous candidate.
+            session.send(b"\r\x1b[13;5u")
+            session.wait_screen(lambda screen: "完整结果.txt" in "".join(screen.display[row + 1:]) and screen.display[row].startswith("✦  "))
+            frames = {frame for frame in orbit if frame.encode() in session.log}
+            self.assertGreaterEqual(len(frames), 3)
+            self.assertEqual(len(Handler.requests), requests + 1)
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "touch '完整结果.txt'"))
+            self.assertEqual(termios.tcgetattr(session.master), session.original)
+
+        def test_repeated_tab_while_refreshing_keeps_one_model_request(self):
+            self.configure("slow")
+            session = self.session("// 当前路径")
+            session.wait_for("pwd")
+            requests = len(Handler.requests)
+            session.send(b"\t\t\t")
+            session.wait_screen(lambda screen: "完整结果.txt" in "".join(screen.display) and screen.display[screen.y].startswith("✦  "))
+            self.assertEqual(len(Handler.requests), requests + 1)
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "touch '完整结果.txt'"))
+
+        def test_tab_without_model_clears_then_restores_candidate_and_error(self):
+            session = self.session("// 当前路径")
+            session.wait_for("pwd")
+            session.send(b"\t")
+            session.wait_screen(lambda screen: screen.display[0].startswith("⣾  ") and all(not line for line in screen.display[1:]))
+            session.wait_screen(lambda screen: screen.display[0].startswith("✦  ") and "pwd" in screen.display[1] and any("Configure a model" in line for line in screen.display))
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
+
+        def test_failed_alternative_restores_local_command_after_refresh(self):
+            self.configure("auth")
+            session = self.session("// 当前路径")
+            session.wait_for("pwd")
+            session.send(b"\t")
+            session.wait_screen(lambda screen: screen.display[0].startswith("⣾  ") and all(not line for line in screen.display[1:]))
+            session.wait_screen(lambda screen: screen.display[0].startswith("✦  ") and "pwd" in screen.display[1] and any("Authentication failed" in line for line in screen.display))
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "pwd"))
+
+        def test_duplicate_alternative_restores_result_after_visible_refresh(self):
+            self.configure()
+            session = self.session("// 当前路径")
+            session.wait_for("pwd")
+            session.send(b"\t")
+            session.wait_screen(lambda screen: screen.display[0].startswith("✦  ") and "printf" in screen.display[1])
+            requests = len(Handler.requests)
+            session.send(b"\t")
+            session.wait_screen(lambda screen: screen.display[0].startswith("⣾  ") and all(not line for line in screen.display[1:]))
+            session.wait_screen(lambda screen: screen.display[0].startswith("✦  ") and any("No alternative candidate" in line for line in screen.display))
+            self.assertEqual(len(Handler.requests), requests + 1)
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "printf '%s\\n' '你好'"))
 
         def test_tab_accepts_new_complete_candidate_and_cache_wins_over_rules(self):
             self.configure()

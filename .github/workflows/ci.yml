@@ -20,9 +20,15 @@ jobs:
       - name: Install zsh and plugin test dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh zsh-autosuggestions zsh-syntax-highlighting
+      - name: Verify custom font assets
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install -r tools/font-requirements.txt
+          python tests/fonts.py
       - run: zig build test
       - run: zig build -Doptimize=small
       - run: python tests/integration.py
+      - run: python tests/release.py
       - name: Windows ConPTY dependencies
         if: runner.os == 'Windows'
         shell: pwsh

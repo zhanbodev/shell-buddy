@@ -9,7 +9,9 @@ pub const help = "usage: shell-buddy init [<shell>]\n\n" ++
     "Without arguments, open the interactive model setup wizard.\n" ++
     "With a shell name, print its integration script for evaluation.\n" ++
     "Configure a model interactively and save its API key with private permissions.\n" ++
-    "Use Tab to switch profiles. Press Enter to keep a displayed value.\n" ++
+    "Use Tab to switch profiles and terminal icons. Press Enter to keep a displayed value.\n" ++
+    "Choose star (default) or lizard (requires the Shell Buddy font).\n" ++
+    "Setup does not download files or install fonts; release installers include the font.\n" ++
     "API keys are hidden and stored separately in credentials.json (plaintext).\n" ++
     "Press Esc or Ctrl+C to cancel before saving.\n";
 
@@ -21,7 +23,8 @@ pub fn run(init: std.process.Init) !u8 {
     try term.write("Shell Buddy setup\r\n\r\n" ++
         "  - local  Use a local model service, such as Ollama\r\n" ++
         "  - cloud  Use a cloud model service\r\n\r\n" ++
-        "Tab switches profiles; Enter keeps a displayed value; Esc cancels.\r\n");
+        "Font installation is handled by the release installer; setup downloads nothing.\r\n" ++
+        "Tab switches choices; Enter keeps a displayed value; Esc cancels.\r\n");
     const cfg = setup(init, &wizard) catch |err| {
         try term.write("\r\n");
         if (err == error.SetupCancelled or err == error.TerminalClosed) {
@@ -57,13 +60,16 @@ fn setup(init: std.process.Init, wizard: *Wizard) !config.Config {
     if (has_env) try wizard.term.write("An environment key is set and takes priority over saved credentials.\r\n");
     const required = std.mem.eql(u8, selection, "cloud") and stored == null and !has_env;
     const key = try wizard.ask(if (stored != null or has_env) "API key (hidden, Enter to keep): " else if (required) "API key (hidden, required): " else "API key (hidden, optional): ", "", .secret, required);
+    try wizard.term.write("\r\n  - star    ✦  Standard star (default; no extra font)\r\n" ++
+        "  - lizard  Custom mascot (install and configure Shell Buddy font first)\r\n\r\n");
+    const icon = try wizard.ask("Terminal icon: ", @tagName(current.icon), .icon, false);
     try wizard.term.write("Saving configuration...\r\n");
-    const cfg = try config.saveProfile(a, init.io, init.environ_map, selection, .{ .base_url = base_url, .model = model, .api_key_env = env_name }, if (key.len > 0) key else null);
+    const cfg = try config.saveProfile(a, init.io, init.environ_map, selection, .{ .base_url = base_url, .model = model, .api_key_env = env_name }, if (key.len > 0) key else null, if (std.mem.eql(u8, icon, "lizard")) .lizard else .star);
     _ = try control.update(a, init.io, cfg.state_path, null);
     return cfg;
 }
 
-const Kind = enum { profile, url, model, secret };
+const Kind = enum { profile, icon, url, model, secret };
 const Wizard = struct {
     term: *terminal.Terminal,
     a: std.mem.Allocator,
@@ -110,6 +116,7 @@ const Wizard = struct {
                     const value = buffer[0..len];
                     const valid = switch (kind) {
                         .profile => config.validSelection(value),
+                        .icon => std.mem.eql(u8, value, "lizard") or std.mem.eql(u8, value, "star"),
                         .url => validUrl(value) and !std.mem.eql(u8, value, "https://YOUR_PROVIDER/v1"),
                         .model => validModel(value),
                         .secret => (len == 0 and !required) or credentials.validKey(value),
@@ -118,6 +125,7 @@ const Wizard = struct {
                     if (valid) return try self.a.dupe(u8, value);
                     try self.term.write(switch (kind) {
                         .profile => "Choose a listed profile, or press Tab to switch.\r\n",
+                        .icon => "Choose star or lizard, or press Tab to switch.\r\n",
                         .url => "Enter an HTTP(S) base URL without credentials, query or fragment.\r\n",
                         .model => "Enter the model name provided by your service.\r\n",
                         .secret => "Enter a valid API key; cloud requires an existing or new key.\r\n",
@@ -127,8 +135,8 @@ const Wizard = struct {
                         cursor = 0;
                     }
                 },
-                .tab => if (kind == .profile and !pasting) {
-                    const value = if (std.mem.eql(u8, buffer[0..len], "local")) "cloud" else "local";
+                .tab => if ((kind == .profile or kind == .icon) and !pasting) {
+                    const value = if (kind == .icon) (if (std.mem.eql(u8, buffer[0..len], "star")) "lizard" else "star") else (if (std.mem.eql(u8, buffer[0..len], "local")) "cloud" else "local");
                     @memcpy(buffer[0..value.len], value);
                     len = value.len;
                     cursor = len;

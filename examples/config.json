@@ -11,6 +11,7 @@
       "api_key_env": "SHELL_BUDDY_API_KEY"
     }
   },
+  "icon": "star",
   "debounce_ms": 150,
   "max_tokens": 2048,
   "timeout_ms": 8000

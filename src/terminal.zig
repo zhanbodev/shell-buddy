@@ -245,7 +245,7 @@ pub const Terminal = struct {
     }
 
     pub fn lineColumn(self: *Terminal) usize {
-        return @min(self.inline_column orelse 0, self.columns() -| 4);
+        return @min(self.inline_column orelse 0, self.columns() -| 6);
     }
 
     pub fn beginInline(self: *Terminal, left_width: usize) !void {

@@ -1,0 +1,2 @@
+# Optional asset/patch tooling; not a runtime dependency of shell-buddy.
+fonttools==4.60.2

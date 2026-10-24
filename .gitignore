@@ -5,3 +5,7 @@ zig-out/
 __pycache__/
 .DS_Store
 restart.sh
+
+.font-tools/
+
+dist/
