@@ -2,9 +2,9 @@
 
 [English](README.md) · [项目首页](../README.zh-CN.md)
 
-[ShellBuddyIcons.ttf](ShellBuddyIcons.ttf) 使用我们选定的蜥蜴形象，提取为保留大眼睛、吐舌和卷尾的单色轮廓。字体族为 **Shell Buddy Icons**，字符位为私有区 **U+F5000**，颜色由终端文字样式控制。
+[ShellBuddyIcons.ttf](ShellBuddyIcons.ttf) 字体族为 **Shell Buddy Icons**，当前版本 **1.1**。包含自有蜥蜴轮廓 U+F5000，以及圆角输入需要的 U+F5001–U+F5006 六个端帽字形。
 
-默认配置为 `"icon": "star"`，无需安装字体就显示 `✦`。旧的 `nerd_font` 字段不再启用图标。安装字体后仍需设置终端的字体映射或主字体，再主动选择 `lizard`。程序无法可靠检测终端字体，SSH 场景也一样。
+AI 输入只显示一个金色 `❯`，不再追加星星或蜥蜴。默认 `"input_style": "square"` 无需自定义字体；选择 `"rounded"` 前先配置终端的字体映射或补丁字体。旧版仅含蜥蜴的字体需要重新安装/打补丁。程序无法自动检测终端字体，SSH 场景也一样。
 
 [程序与字体组合安装](../docs/install.zh-CN.md)会默认安装字体。`shell-buddy init` 只负责程序配置，不下载文件。下方命令用于单独安装字体。
 
@@ -31,10 +31,10 @@ pwsh -File .\fonts\install.ps1
 **Kitty** 可以保留原有文字字体，在 `kitty.conf` 中加入：
 
 ```conf
-symbol_map U+F5000 Shell Buddy Icons
+symbol_map U+F5000-U+F5006 Shell Buddy Icons
 ```
 
-重新加载配置或重启 Kitty。该映射只影响蜥蜴字符。[Kitty 官方说明](https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.symbol_map)
+重新加载配置或重启 Kitty。该映射只影响 Shell Buddy 的私有字符。[Kitty 官方说明](https://sw.kovidgoyal.net/kitty/conf/#opt-kitty.symbol_map)
 
 **iTerm2、Terminal.app、Windows Terminal 等没有按字符映射字体的终端**，推荐将图标加入正在使用的等宽字体副本，再选择这个新字体。仅安装符号字体并不保证终端会自动选它作为回退字体；不要把只有符号的字体当作主文字字体。
 
@@ -58,16 +58,16 @@ py -m venv .font-tools
 .\.font-tools\Scripts\python.exe tools\patch_icon_font.py "C:\path\YourMono-Regular.ttf" "C:\path\YourMono-ShellBuddy.ttf"
 ```
 
-输入应为**静态 TrueType `.ttf` 等宽字体**，不支持 `.ttc` 字体集合、可变字体或 CFF `.otf`。工具保留原文件、文字字形、许可证记录和单字符宽度，生成名称以 **Shell Buddy** 结尾的新字体族，并打印准确名称。修改后的副本会移除不再有效的源数字签名表。已有输出文件或 U+F5000 已被占用时会拒绝写入。使用独立粗体或斜体文件时，分别生成对应样式副本。
+输入应为**静态 TrueType `.ttf` 等宽字体**，不支持 `.ttc` 字体集合、可变字体或 CFF `.otf`。工具保留原文件、文字字形、许可证记录和单字符宽度，生成名称以 **Shell Buddy** 结尾的新字体族，并打印准确名称。修改后的副本会移除不再有效的源数字签名表。已有输出文件或 U+F5000–U+F5006 已被占用时会拒绝写入。使用独立粗体或斜体文件时，分别生成对应样式副本。
 
 安装生成的新 TTF：macOS / Windows 打开文件后选择安装；Linux 复制到 `~/.local/share/fonts` 后执行 `fc-cache -f`。随后在终端字体设置中选择工具打印的新字体族。[iTerm2 字体设置](https://iterm2.com/documentation-fonts.html) · [Windows Terminal 字体设置](https://learn.microsoft.com/windows/terminal/customize-settings/profile-appearance#font-face)
 
-## 启用蜥蜴
+## 启用圆角
 
 在现有 `config.json` 中设置：
 
 ```json
-"icon": "lizard"
+"input_style": "rounded"
 ```
 
 然后运行：
@@ -76,25 +76,25 @@ py -m venv .font-tools
 shell-buddy restart
 ```
 
-也可以运行 `shell-buddy init`，在图标步骤选择 `lizard`。向导默认选择 `star`，已有明确选择则保留；`doctor` 显示当前有效值。
+也可以运行 `shell-buddy init`，在 Input style 步骤选择 rounded。首次默认 square，已有明确选择会保留；`doctor` 显示有效设置。旧 icon/nerd_font 字段不再启用图标，向导保存时移除。
 
 在已配置好字体的终端中测试字符：
 
 ```sh
-printf '\363\265\200\200\n'
+printf '\363\265\200\201\363\265\200\202 \363\265\200\203\363\265\200\204 \363\265\200\205\363\265\200\206\n'
 ```
 
 PowerShell：
 
 ```powershell
-[char]::ConvertFromUtf32(0xF5000)
+0xF5001..0xF5006 | ForEach-Object { [char]::ConvertFromUtf32($_) }
 ```
 
-显示缺字时，改回 `"icon": "star"` 并重新加载。远程主机安装字体不会改变本地终端的渲染字体。完整蜥蜴缩到一个字符时会减少细节，属于正常的单色字体图标表现。
+程序将端帽前景色与输入底色设为同色。补丁中的端帽铺满原字体单字符宽度及 hhea 上升/下降范围，原文字形和指标保持不变。终端额外行距可能使边缘留白，建议默认行高。出现缺字或接缝时，切回 `"input_style": "square"` 并重新加载。SSH 字体在本地终端渲染；符号字体不要作为主文字字体。
 
 ## 源文件与验证
 
-[lizard.svg](lizard.svg) 来自已确认的[蜥蜴 Logo](../assets/logo.png)的单色轮廓，眼睛和舌头使用留白。随项目提供的字体只包含本项目图形和空格，不打包第三方文字字体。
+[lizard.svg](lizard.svg) 来自已确认的[蜥蜴 Logo](../assets/logo.png)的单色轮廓，眼睛和舌头使用留白。随项目提供的字体只包含本项目图形、圆角形状和空格，不打包第三方文字字体。
 
 在安装了 `fonttools` 的 Python 环境中运行：
 

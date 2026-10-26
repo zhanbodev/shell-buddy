@@ -21,7 +21,7 @@
 
 支持 **Zsh 5.8+**、**Bash 5+**，以及配合 PSReadLine 2.3.6+ 的 **PowerShell 7.4+**。macOS 自带的 Bash 3.2 不受支持，默认 Zsh 可直接使用。
 
-下载 **[v0.1.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.1.0)**，支持 macOS（Apple Silicon / Intel）、Linux x86_64 和 Windows x86_64，发布包包含程序、吉祥物字体和安装器。[预编译包安装 →](docs/install.zh-CN.md#从公开发布包安装)
+下载 **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)**，支持 macOS（Apple Silicon / Intel）、Linux x86_64 和 Windows x86_64，发布包包含程序、吉祥物字体和安装器。[预编译包安装 →](docs/install.zh-CN.md#从公开发布包安装)
 
 从当前源码构建安装，需要 Zig 0.17.0：
 
@@ -63,7 +63,7 @@ shell-buddy init
 
 | 按键 | 行为 |
 | --- | --- |
-| Tab | 显示另一个建议，图标位置播放短暂旋转动画 |
+| Tab | 显示另一个建议，提示符短暂明暗变化 |
 | Enter | 将完整命令放回命令行，供确认或继续编辑 |
 | 再按 Enter | 交给当前 Shell 执行 |
 | macOS Cmd+Enter / Windows、Linux Ctrl+Enter | 接受并执行，需[配置终端按键](examples/terminal-keys.md) |
@@ -72,11 +72,13 @@ shell-buddy init
 
 未完成的流式结果和隐藏的旧建议都不能被接受。Tab 换版失败时，会恢复已有完整建议并显示简短原因。
 
-## 认识你的搭档
+## AI 输入
 
-芒果黄蜥蜴也可以出现在你的终端里。Shell Buddy 默认使用 `✦`，适配现有字体。安装器附带可选的 **Shell Buddy Icons** 字体；配置终端显示该字形后，在 `shell-buddy init` 中选择 `lizard` 即可。
+输入 `//` 后，Shell Buddy 临时接管当前输入行，统一显示金色 `❯` 和低对比度底色；空输入提示 `What do you need?`，输入后自动消失。生成与 Tab 换版只改变提示符亮度；完整命令就绪后显示确认提示。接受或取消后恢复用户原有提示符，上方的多行主题信息保持不变。
 
-也可以在 `config.json` 中设为 `"icon": "lizard"`，然后执行 `shell-buddy restart`。终端无法显示自定义字形时，请保留 `star`。[字体配置 →](fonts/README.zh-CN.md)
+默认 `"input_style": "square"`，无需额外字体。使用 **Shell Buddy Icons 1.1+** 并配置终端字体后，可在 `shell-buddy init` 选择 `rounded`，或设置 `"input_style": "rounded"` 后运行 `restart`。旧 `icon`、`nerd_font` 设置不再显示额外图标。[圆角字体配置 →](fonts/README.zh-CN.md)
+
+新版输入样式已包含在 v0.2.0 中；上方录屏展示的是 v0.1.0 的旧图标界面。
 
 ## 模型由你选择
 
@@ -92,7 +94,7 @@ shell-buddy doctor
 
 | 命令 | 用途 |
 | --- | --- |
-| `shell-buddy init` | 配置模型、凭据和图标 |
+| `shell-buddy init` | 配置模型、凭据和输入样式 |
 | `shell-buddy start` / `stop` | 启用建议，或停用并取消正在生成的请求 |
 | `shell-buddy restart` | 校验并重新加载配置，然后启用建议 |
 | `shell-buddy status` | 查看状态与配置路径 |

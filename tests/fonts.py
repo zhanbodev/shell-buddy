@@ -42,6 +42,12 @@ class Fonts(unittest.TestCase):
         self.assertGreater(glyph.xMax, glyph.xMin)
         self.assertEqual(font['hmtx']['shellbuddy.lizard'][0], font['hmtx']['space'][0])
         self.assertEqual(font['name'].getDebugName(1), 'Shell Buddy Icons')
+        self.assertIn('1.100', font['name'].getDebugName(5))
+        for cp in range(0xF5001, 0xF5007):
+            name = font.getBestCmap()[cp]
+            self.assertEqual(font['hmtx'][name][0], 1000)
+            cap = font['glyf'][name]
+            self.assertEqual((cap.xMin, cap.xMax, cap.yMin, cap.yMax), (0, 1000, -200, 1000))
 
     def test_patch_preserves_source_text_metrics_and_changes_family(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -57,6 +63,11 @@ class Fonts(unittest.TestCase):
             self.assertEqual(font['hmtx']['shellbuddy.lizard'][0], 600)
             self.assertEqual(font.getBestCmap()[0xF5000], 'shellbuddy.lizard')
             self.assertEqual(font['name'].getDebugName(1), 'Test Mono Shell Buddy')
+            for cp in range(0xF5001, 0xF5007):
+                name = font.getBestCmap()[cp]
+                self.assertEqual(font['hmtx'][name][0], 600)
+                cap = font['glyf'][name]
+                self.assertEqual((cap.xMin, cap.xMax, cap.yMin, cap.yMax), (0, 600, -200, 900))
             self.assertTrue(all(record.toUnicode() != 'Test Mono' for record in font['name'].names if record.nameID in (1,16)))
             glyph = font['glyf']['shellbuddy.lizard']
             self.assertGreaterEqual(glyph.xMin, 0)
@@ -66,6 +77,23 @@ class Fonts(unittest.TestCase):
             with self.assertRaises(ValueError): patcher.patch(source, source)
             with self.assertRaises(ValueError): patcher.patch(source, output)
             with self.assertRaises(ValueError): patcher.patch(output, Path(directory)/'again.ttf')
+
+    def test_cap_only_slot_collision_rejects_without_writing(self):
+        from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory)/'source.ttf', Path(directory)/'patched.ttf'
+            fixture(source)
+            font = TTFont(source)
+            table = CmapSubtable.newSubtable(12)
+            table.platformID, table.platEncID, table.language = 3, 10, 0
+            table.cmap = dict(font.getBestCmap())
+            table.cmap[0xF5004] = 'M'
+            font['cmap'].tables.append(table)
+            font.save(source)
+            original = source.read_bytes()
+            with self.assertRaises(ValueError): patcher.patch(source, output)
+            self.assertFalse(output.exists())
+            self.assertEqual(source.read_bytes(), original)
 
     def test_asset_build_is_reproducible(self):
         spec = importlib.util.spec_from_file_location('build_icon_font', ROOT/'tools/build_icon_font.py')

@@ -20,4 +20,4 @@ fi
 mkdir -p "$font_destination"
 cp "$font_source" "$font_destination/ShellBuddyIcons.ttf"
 if [ "$system" = Linux ] && command -v fc-cache >/dev/null 2>&1; then fc-cache -f "$font_destination"; fi
-printf '%s\n' "Font installed: $font_destination/ShellBuddyIcons.ttf" 'Configure terminal font mapping before choosing icon: lizard. Default: star.'
+printf '%s\n' "Font installed: $font_destination/ShellBuddyIcons.ttf" 'Configure U+F5001-U+F5006 font mapping before choosing input_style: rounded. Default: square.'

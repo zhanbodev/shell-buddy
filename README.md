@@ -21,7 +21,7 @@ Type `//`, describe what you need, and get a command right below your input. Rev
 
 Supports **Zsh 5.8+**, **Bash 5+**, and **PowerShell 7.4+** with PSReadLine 2.3.6+. macOS's bundled Bash 3.2 is unsupported; its default Zsh works out of the box.
 
-Download **[v0.1.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.1.0)** for macOS (Apple Silicon / Intel), Linux x86_64, or Windows x86_64. Bundles include the executable, mascot font, and installer. [Prebuilt installation →](docs/install.md#from-a-published-release)
+Download **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)** for macOS (Apple Silicon / Intel), Linux x86_64, or Windows x86_64. Bundles include the executable, mascot font, and installer. [Prebuilt installation →](docs/install.md#from-a-published-release)
 
 To build and install from this checkout with Zig 0.17.0:
 
@@ -47,7 +47,7 @@ Enable Shell Buddy in your current session:
 | Bash | `eval "$(shell-buddy init bash)"` |
 | PowerShell | `shell-buddy init powershell \| Out-String \| Invoke-Expression` |
 
-Then configure your endpoint, model, hidden API key, and preferred icon:
+Then configure your endpoint, model, hidden API key, and input style:
 
 ```sh
 shell-buddy init
@@ -63,7 +63,7 @@ Only input beginning with `//` activates Shell Buddy. Your description stays abo
 
 | Key | Action |
 | --- | --- |
-| Tab | Show another suggestion, with a short rotation in the icon cell |
+| Tab | Show another suggestion, with a short brightness pulse on the prompt |
 | Enter | Put the complete command on your command line for review or editing |
 | Enter again | Execute through your shell |
 | Cmd+Enter on macOS / Ctrl+Enter on Windows and Linux | Accept and execute, with [terminal key configuration](examples/terminal-keys.md) |
@@ -72,11 +72,13 @@ Only input beginning with `//` activates Shell Buddy. Your description stays abo
 
 Incomplete streams and hidden old suggestions cannot be accepted. If a Tab refresh fails, the previous complete suggestion returns with a short explanation.
 
-## Meet your buddy
+## AI input
 
-Our mango-gold lizard is also available inside your terminal. Shell Buddy uses `✦` by default, so it works with your existing font. The installers include the optional **Shell Buddy Icons** font; configure your terminal to display it, then select `lizard` in `shell-buddy init`.
+Typing `//` temporarily hands the current input row to Shell Buddy: one gold `❯`, a subtle background, and an empty-input placeholder that disappears as you type. Generation and Tab refresh pulse the prompt without adding another icon. A complete command reveals the acceptance hint. Accepting or canceling restores your original shell prompt; context above a multiline prompt stays visible.
 
-You can also set `"icon": "lizard"` in `config.json` and run `shell-buddy restart`. Keep `star` if your terminal cannot display the custom glyph. [Font setup →](fonts/README.md)
+The default `"input_style": "square"` needs no extra font. Configure **Shell Buddy Icons 1.1+**, then select `rounded` in `shell-buddy init`, or set `"input_style": "rounded"` and run `restart`. Legacy `icon` and `nerd_font` settings no longer add an icon. [Rounded font setup →](fonts/README.md)
+
+These input styles are included in v0.2.0. The recording above shows the earlier v0.1.0 icon interface.
 
 ## Your model, your choice
 
@@ -92,7 +94,7 @@ Configuration defaults to `~/.config/shell-buddy/`. The wizard saves keys separa
 
 | Command | Purpose |
 | --- | --- |
-| `shell-buddy init` | Configure a model, credentials, and icon |
+| `shell-buddy init` | Configure a model, credentials, and input style |
 | `shell-buddy start` / `stop` | Enable suggestions, or disable them and cancel generation |
 | `shell-buddy restart` | Validate and reload configuration, then enable suggestions |
 | `shell-buddy status` | Show state and configuration path |

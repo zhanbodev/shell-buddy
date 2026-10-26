@@ -18,7 +18,7 @@ The adapter pins the binary's absolute path in `SHELL_BUDDY_BIN`, so suggestions
 
 Only a leading `//` activates AI mode. Pasting an entire `// description` and pressing Enter also enters the editor. Ordinary input keeps native shell behavior. UTF-8 Chinese, bracketed paste, arrows, Home/End, Backspace/Delete, and Ctrl+A/E/U/W are supported. Descriptions and suggestions wrap to the terminal width; tall input keeps the insertion cursor in the viewport. A visual ellipsis never truncates the accepted command.
 
-Tab clears the output region and plays one eight-frame rotation over 480ms in the icon cell, then restores the configured icon. Character terminals use rotating glyphs rather than a transformed image. A pending request is reused when Tab is pressed again. Hidden previous candidates and unfinished streams cannot be accepted. Failed or duplicate alternatives restore the previous complete result and show the reason. Editing the description cancels the transition and the stale request. Normal generation uses a slow brightness pulse.
+Tab clears the output region and pulses the single gold prompt for 480ms. A pending request is reused when Tab is pressed again. Hidden previous candidates and unfinished streams cannot be accepted. Failed or duplicate alternatives restore the previous complete result and show the reason. Editing the description cancels the transition and the stale request. Normal generation uses a slow brightness pulse.
 
 Enter fills the native command buffer. A second Enter executes it. Modified Enter accepts and submits through the native editor: [terminal sequences](../examples/terminal-keys.md), [Windows Terminal example](../examples/windows-terminal.json). This preserves current-session `cd`, variables, and shell state.
 
@@ -40,7 +40,7 @@ Run `shell-buddy init` for guided setup, or print a template with `shell-buddy c
       "api_key_env": "SHELL_BUDDY_API_KEY"
     }
   },
-  "icon": "star",
+  "input_style": "square",
   "debounce_ms": 150,
   "max_tokens": 2048,
   "timeout_ms": 8000
@@ -68,15 +68,15 @@ Credentials are stored **in plaintext**. Dedicated configuration directories use
 
 `api_key_env` is an environment variable **name**, never a key value. Resolution checks that variable before the selected profile's saved key. An explicitly empty or invalid variable fails instead of silently falling back. Each profile has separate stored credentials.
 
-## Terminal icon
+## Input appearance
 
-`icon` is an independent global enum: `star` (default) or `lizard`. Missing settings and older configs containing only `nerd_font` use `star`. The obsolete boolean is ignored and removed when the wizard saves a configuration. Invalid `icon` values fail validation; there is no stock animal glyph.
+`input_style` is `square` (default, no extra font) or `rounded` (requires Shell Buddy Icons 1.1+ at U+F5001–U+F5006). The application cannot reliably detect terminal font coverage. Select rounded only after configuring the font; choose square if caps are missing. `icon` and `nerd_font` are legacy settings and are ignored; the wizard removes them on save.
 
-`star` displays the ordinary `✦`. `lizard` displays the project's own monochrome mascot at private-use **U+F5000**. Install and configure the [custom font](../fonts/README.md) before selecting it. The symbol font is approximately 3.4 KiB, separate from the executable. A font patch utility supports static TrueType monospace fonts without overwriting the source or changing ordinary text advances.
+AI mode owns the final prompt row, showing one gold `❯` over a subtle background. It does not search for or edit a native `❯` character. Bash Readline, Zsh ZLE, and PowerShell PSReadLine redraw their original prompts on handoff. Multiline context above the input row is preserved; single-line theme content is temporarily replaced and then restored. Shell configuration and prompt functions are not changed.
 
-The wizard lists `star` and `lizard` after the key step, defaults to `star`, and preserves an explicit existing choice. Cancellation saves nothing. Model switching preserves the icon, and `restart` applies it to active editors without changing cache identity. `doctor` reports the effective enum.
+Empty input displays `What do you need?` without inserting it in the buffer. During generation, only prompt brightness changes. Partial output is dim; complete commands use the terminal foreground. A short acceptance hint appears only when a complete candidate is visible and the pane is wide enough. Rounded wrapped input uses top/bottom corner glyphs and straight middle rows. Every exit resets terminal attributes.
 
-The client cannot reliably inspect terminal font coverage, especially over SSH. The safe default is always the star; installing a font never silently enables the icon. No font or terminal setting is installed or modified by `init` or the editor.
+The wizard offers square/rounded after the key step. Missing styles default to square, including older icon configs; existing explicit style choices are preserved. `restart` applies a style change without affecting cache identity, and `doctor` shows the effective setting. Setup installs no fonts. [Font mapping and patching](../fonts/README.md).
 
 ## Models and failures
 
@@ -123,16 +123,16 @@ Cache identity includes description, OS, shell, working directory, selected mode
 
 Targets: binary ≤5 MiB, editor peak RSS ≤20 MiB, local suggestion p95 ≤30ms. Model latency is separate.
 
-macOS arm64, Zig 0.17.0, small build; measurements after wrapped rendering, icon spacing, and release packaging were added (2026-10-24):
+macOS arm64, Zig 0.17.0, small build; measurements after the single-prompt input and resize-safe background were added (2026-10-26):
 
 | Metric | Measured |
 | --- | --- |
 | Binary | ~642 KiB |
-| Local rule CLI p95, 100 measured runs | 5.03ms |
-| Standalone editor first suggestion p95 | 7.34ms |
-| Native Zsh input to suggestion p95 | 6.22ms |
-| Full 256-entry cache CLI p95 | 8.14ms |
-| Editor peak RSS with full cache | 4.91 MiB |
+| Local rule CLI p95, 100 measured runs | 4.63ms |
+| Standalone editor first suggestion p95 | 18.78ms |
+| Native Zsh input to suggestion p95 | 6.03ms |
+| Full 256-entry cache CLI p95 | 8.01ms |
+| Editor peak RSS with full cache | 4.94 MiB |
 
 Reproduce with `python3 tests/benchmark.py`; machine load affects results. Brand images are documentation assets and are not embedded in the executable.
 

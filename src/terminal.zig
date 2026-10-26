@@ -245,7 +245,7 @@ pub const Terminal = struct {
     }
 
     pub fn lineColumn(self: *Terminal) usize {
-        return @min(self.inline_column orelse 0, self.columns() -| 6);
+        return self.inline_column orelse 0;
     }
 
     pub fn beginInline(self: *Terminal, left_width: usize) !void {
@@ -277,9 +277,10 @@ pub const Terminal = struct {
         var buffer: [80]u8 = undefined;
         if (wrapped_rows > 0) try self.write(try std.fmt.bufPrint(&buffer, "\x1b[{d}A", .{wrapped_rows}));
         try self.write("\r");
-        if (start > 0) try self.write(try std.fmt.bufPrint(&buffer, "\x1b[{d}C", .{start}));
         try self.write(if (wrapped_rows > 0) "\x1b[J" else "\x1b[K");
-        self.inline_column = start;
+        // Own the whole input row, irrespective of the native prompt glyph.
+        // The adapter redraws its prompt after close restores the native cursor.
+        self.inline_column = 0;
         self.restore_rows = wrapped_rows;
         self.restore_column = column;
     }

@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="shell-buddy-benchmark-") as directory:
                 for i in range(25):
                     start = time.perf_counter_ns()
                     native.send("//当前路径")
-                    native.wait_for("\x1b[90mpwd")
+                    native.wait_for("\x1b[0mpwd")
                     elapsed = (time.perf_counter_ns() - start) / 1_000_000
                     native.send(b"\x03")
                     native.wait_screen(lambda screen: screen.display[screen.y] == "BENCH>")

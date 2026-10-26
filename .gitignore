@@ -9,3 +9,6 @@ restart.sh
 .font-tools/
 
 dist/
+
+# Local recording and video-production outputs
+output/

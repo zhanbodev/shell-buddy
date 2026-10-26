@@ -39,7 +39,7 @@ The ziguana direction connects to the animal family of Zig's mascots, with a fre
 - **Text:** deep ink `#172236` on light backgrounds; pale gray on dark backgrounds.
 - **Typography:** a contemporary, confident sans serif for the name; monospace for commands. README titles use the host's typography for consistent rendering.
 - **Shape:** rounded, compact anatomy with crisp geometric color facets. Eyes and pose carry the humor; no accessory clutter.
-- **Terminal:** default `icon: "star"` displays `✦`; explicit `icon: "lizard"` uses our own [monochrome font](../../fonts/README.md) at U+F5000. Font installation and terminal configuration precede opt-in. The glyph retains the approved mascot's silhouette and facial cutouts; the full-color artwork remains outside the executable.
+- **Terminal:** AI mode uses one gold `❯` over a subtle input background. Default `input_style: "square"` has no font dependency; `input_style: "rounded"` uses [Shell Buddy Icons 1.1+](../../fonts/README.md) at U+F5001–U+F5006. The mascot stays a brand asset and font character rather than an additional input prefix.
 
 The mascot can be colorful while the surrounding README remains quiet: one centered mark, a clear name, one line of positioning, one accurate terminal example, and language navigation. No decorative category strips, badge walls, or inflated feature claims.
 

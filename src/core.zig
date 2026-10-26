@@ -1,4 +1,4 @@
-pub const Icon = enum { star, lizard };
+pub const InputStyle = enum { square, rounded };
 const std = @import("std");
 pub const max_command = 4096;
 pub const Shell = enum { bash, zsh, powershell };
@@ -83,6 +83,8 @@ pub fn next(text: []const u8, pos: usize) usize {
 
 // Terminal cells, with narrow ambiguous characters. Combining marks take no cell.
 pub fn cells(cp: u21) usize {
+    // Supplementary private-use font symbols occupy one terminal cell.
+    if ((cp >= 0xf0000 and cp <= 0xffffd) or (cp >= 0x100000 and cp <= 0x10fffd)) return 1;
     if ((cp >= 0x300 and cp <= 0x36f) or (cp >= 0x1ab0 and cp <= 0x1aff) or
         (cp >= 0x1dc0 and cp <= 0x1dff) or (cp >= 0xfe00 and cp <= 0xfe0f) or
         (cp >= 0xfe20 and cp <= 0xfe2f) or cp == 0x200d) return 0;

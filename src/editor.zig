@@ -170,7 +170,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             } else {
                 job = makeJob(init, cfg, shell, cwd) catch |err| {
                     status = model.message(err);
-                    try draw(&term, .{ .text = text[0..len], .cursor = cursor, .notice = status, .icon = cfg.icon }, &last_hash);
+                    try draw(init.gpa, &term, .{ .text = text[0..len], .cursor = cursor, .notice = status, .input_style = cfg.input_style }, &last_hash);
                     continue;
                 };
                 @memcpy(job.input[0..len], text[0..len]);
@@ -194,14 +194,14 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             }
             break :p null;
         };
-        try draw(&term, .{
+        try draw(init.gpa, &term, .{
             .text = text[0..len],
             .cursor = cursor,
             .suggestion = if (turn != null) null else suggestion,
             .notice = if (turn != null) null else status,
             .ready = !replacing and candidates.get() != null,
             .turn = turn,
-            .icon = cfg.icon,
+            .input_style = cfg.input_style,
             .busy = future != null,
         }, &last_hash);
 
@@ -355,12 +355,13 @@ fn remove(text: *[core.max_command]u8, len: *usize, from: usize, to: usize) void
     len.* -= to - from;
 }
 
-fn draw(term: *terminal.Terminal, view: ui.View, last: *?u64) !void {
-    var buffer: [20000]u8 = undefined;
-    var w: std.Io.Writer = .fixed(&buffer);
+fn draw(allocator: std.mem.Allocator, term: *terminal.Terminal, view: ui.View, last: *?u64) !void {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    defer output.deinit();
+    const w = &output.writer;
     var frame = view;
     if (view.busy) frame.frame = @intCast(@divTrunc(now(term.io), 120));
-    const position = try ui.render(&w, term.columns(), term.lineColumn(), term.rows(), frame);
+    const position = try ui.render(w, term.columns(), term.lineColumn(), term.rows(), frame);
     const hash = std.hash.Wyhash.hash(0, w.buffered());
     if (last.* == null or last.*.? != hash) {
         if (term.display_row > 0) {

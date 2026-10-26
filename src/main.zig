@@ -136,8 +136,8 @@ fn run(init: std.process.Init) !u8 {
     const cfg = try config.load(a, init.io, init.environ_map);
     if (std.mem.eql(u8, args[1], "doctor")) {
         const state = try control.read(a, init.io, cfg.state_path);
-        const text = try std.fmt.allocPrint(a, "config: {s}\ncache: {s}\nprofile: {s}\nmodel: {s}\nmax_tokens: {d}\nicon: {s}\nthinking: disabled\nenabled: {s}\nshell integration: {s}\nstatus: {s}\n", .{
-            cfg.config_path, cfg.cache_path, cfg.name, if (cfg.profile) |p| p.model else "unconfigured", cfg.max_tokens, @tagName(cfg.icon), if (state.enabled) "true" else "false", init.environ_map.get("SHELL_BUDDY_SHELL") orelse "not loaded", cfg.problem orelse "ok",
+        const text = try std.fmt.allocPrint(a, "config: {s}\ncache: {s}\nprofile: {s}\nmodel: {s}\nmax_tokens: {d}\ninput_style: {s}\nthinking: disabled\nenabled: {s}\nshell integration: {s}\nstatus: {s}\n", .{
+            cfg.config_path, cfg.cache_path, cfg.name, if (cfg.profile) |p| p.model else "unconfigured", cfg.max_tokens, @tagName(cfg.input_style), if (state.enabled) "true" else "false", init.environ_map.get("SHELL_BUDDY_SHELL") orelse "not loaded", cfg.problem orelse "ok",
         });
         try output(init.io, text);
         return if (cfg.problem == null) 0 else 1;

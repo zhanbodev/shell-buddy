@@ -18,7 +18,8 @@ function _shell_buddy_edit() {
   esac
   # ZLE normally owns bracketed-paste mode; restore its configured start sequence.
   (( ${#zle_bracketed_paste} )) && print -rn -- "$zle_bracketed_paste[1]"
-  zle .redisplay
+  # The editor temporarily owns the final prompt row, including its prefix.
+  zle .reset-prompt
   if (( rc == 10 )); then zle orig-shell-buddy-accept
   else zle -R
   fi

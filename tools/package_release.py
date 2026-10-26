@@ -62,10 +62,10 @@ def package(binary, platform, architecture, output, version=None):
         text = entries[name].decode().replace('../assets/logo.png', f'https://github.com/zhanbodev/shell-buddy/blob/v{version}/assets/logo.png')
         text = text.replace('../README.zh-CN.md', '../README.md')
         entries[name] = text.encode()
-    entries['release.json'] = (json.dumps({'version': version, 'platform': platform, 'architecture': architecture, 'font': 'ShellBuddyIcons.ttf', 'default_icon': 'star'}, indent=2) + '\n').encode()
+    entries['release.json'] = (json.dumps({'version': version, 'platform': platform, 'architecture': architecture, 'font': 'ShellBuddyIcons.ttf', 'default_input_style': 'square'}, indent=2) + '\n').encode()
     entries['README.md'] = f'''# Shell Buddy {version}
 
-This bundle includes the executable, custom lizard font, font tools and installers.
+This bundle includes the executable, custom symbol font, font tools and installers.
 
 macOS/Linux: `sh install.sh`
 Windows PowerShell 7.4+: `pwsh -File .\\install.ps1`
@@ -79,8 +79,8 @@ Add the printed binary directory to PATH, then load the shell integration:
 - PowerShell: `shell-buddy init powershell | Out-String | Invoke-Expression`
 
 Configure a model with `shell-buddy init`. Setup downloads nothing.
-Default icon: star. Installing a font does not select it in your terminal.
-See [font setup](fonts/README.md) or [中文字体指南](fonts/README.zh-CN.md) before enabling `icon: lizard`.
+Default input style: square. Installing a font does not select it in your terminal.
+See [font setup](fonts/README.md) or [中文字体指南](fonts/README.zh-CN.md) before enabling `input_style: rounded`.
 
 [Project documentation](https://github.com/zhanbodev/shell-buddy/tree/v{version})
 '''.encode()

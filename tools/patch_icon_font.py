@@ -1,4 +1,4 @@
-"""Add our lizard to a COPY of a static TrueType monospace font (fonttools required)."""
+"""Add Shell Buddy symbols to a COPY of a static TrueType monospace font (fonttools required)."""
 import argparse
 import re
 from pathlib import Path
@@ -10,6 +10,9 @@ from fontTools.pens.transformPen import TransformPen
 ROOT = Path(__file__).resolve().parents[1]
 CODEPOINT = 0xF5000
 GLYPH = "shellbuddy.lizard"
+CAPS = {0xF5001: "shellbuddy.cap.left", 0xF5002: "shellbuddy.cap.right",
+        0xF5003: "shellbuddy.cap.top.left", 0xF5004: "shellbuddy.cap.top.right",
+        0xF5005: "shellbuddy.cap.bottom.left", 0xF5006: "shellbuddy.cap.bottom.right"}
 
 
 def patch(source, destination):
@@ -19,8 +22,10 @@ def patch(source, destination):
     font = TTFont(source)
     if "glyf" not in font or "fvar" in font:
         raise ValueError("Use a static TrueType .ttf font, not a collection, CFF, or variable font")
-    if any(CODEPOINT in table.cmap for table in font["cmap"].tables if table.isUnicode()):
-        raise ValueError("The source font already maps U+F5000; choose a different source")
+    if any(cp in table.cmap for table in font["cmap"].tables if table.isUnicode() for cp in (CODEPOINT, *CAPS)):
+        raise ValueError("The source font already maps a Shell Buddy private-use symbol; choose a different source")
+    if any(name in font.getGlyphOrder() for name in (GLYPH, *CAPS.values())):
+        raise ValueError("The source font already contains Shell Buddy glyph names")
     # A modified copy cannot retain the source font's signature.
     if "DSIG" in font:
         del font["DSIG"]
@@ -48,6 +53,16 @@ def patch(source, destination):
     font["glyf"][GLYPH] = pen.glyph()
     font["glyf"][GLYPH].recalcBounds(font["glyf"])
     font["hmtx"][GLYPH] = (advance, font["glyf"][GLYPH].xMin)
+    # Caps must fill the destination cell, rather than fit like an illustration.
+    # Keep all original text metrics and glyph outlines untouched.
+    for codepoint, name in CAPS.items():
+        pen = TTGlyphPen(None)
+        icon.getGlyphSet()[name].draw(TransformPen(pen, (advance / 1000, 0, 0, (ascent-descent) / 1200, 0, descent + (ascent-descent) / 6)))
+        order.append(name)
+        font.setGlyphOrder(order)
+        font["glyf"][name] = pen.glyph()
+        font["glyf"][name].recalcBounds(font["glyf"])
+        font["hmtx"][name] = (advance, font["glyf"][name].xMin)
     font["maxp"].numGlyphs = len(order)
     tables = [t for t in font["cmap"].tables if t.isUnicode() and t.format == 12]
     if not tables:
@@ -57,12 +72,12 @@ def patch(source, destination):
         font["cmap"].tables.append(table)
         tables = [table]
     for table in tables:
-        table.cmap[CODEPOINT] = GLYPH
+        table.cmap.update({CODEPOINT: GLYPH, **CAPS})
     old_family = font["name"].getDebugName(16) or font["name"].getDebugName(1) or source.stem
     style = font["name"].getDebugName(2) or "Regular"
     family = old_family + " Shell Buddy"
     postscript = re.sub(r"[^A-Za-z0-9-]", "", family + "-" + style)[:63]
-    names = {1: family, 2: style, 3: postscript + ";ShellBuddy-1.0", 4: family + " " + style, 6: postscript, 16: family, 17: style}
+    names = {1: family, 2: style, 3: postscript + ";ShellBuddy-1.1", 4: family + " " + style, 6: postscript, 16: family, 17: style}
     # Keep source copyright and license records. Replace all localized family
     # records to prevent OS font caches from confusing this copy with its source.
     font["name"].names = [record for record in font["name"].names if record.nameID not in names]

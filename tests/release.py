@@ -19,6 +19,7 @@ packager = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(packager)
 BINARY = Path(os.environ.get('SHELL_BUDDY_TEST_BIN', ROOT/'zig-out/bin'/('shell-buddy.exe' if os.name=='nt' else 'shell-buddy'))).resolve()
 PLATFORM = 'windows' if os.name=='nt' else ('macos' if sys.platform=='darwin' else 'linux')
+VERSION = ROOT.joinpath('src/version.txt').read_text().strip()
 ARCH = 'aarch64' if platform.machine().lower() in ('arm64','aarch64') else 'x86_64'
 
 
@@ -62,7 +63,7 @@ class Release(unittest.TestCase):
         again = packager.package(BINARY,PLATFORM,ARCH,self.directory/'again')
         self.assertEqual(again.read_bytes(),self.archive.read_bytes())
         meta = json.loads(self.bundle.joinpath('release.json').read_text())
-        self.assertEqual(meta['default_icon'],'star')
+        self.assertEqual(meta['default_input_style'],'square')
         self.assertTrue(self.bundle.joinpath('fonts/ShellBuddyIcons.ttf').is_file())
         self.assertFalse(any(self.bundle.rglob('credentials.json')))
         self.assertFalse(any(self.bundle.rglob('config.json')))
@@ -87,7 +88,7 @@ class Release(unittest.TestCase):
         curl.write_text('#!'+sys.executable+'\nimport os,sys,shutil\nfrom pathlib import Path\nurl=next(a for a in sys.argv if a.startswith("https://"))\nout=sys.argv[sys.argv.index("--output")+1]\nshutil.copyfile(Path(os.environ["SB_RELEASE_FIXTURE"])/url.rsplit("/",1)[-1],out)\n')
         curl.chmod(0o755)
         self.env['SB_RELEASE_FIXTURE'] = str(self.archive.parent)
-        command = ['sh',str(ROOT/'install.sh'),'--version','v0.1.0','--','--bin-dir',str(self.bin_dir),'--font-dir',str(self.font_dir)]
+        command = ['sh',str(ROOT/'install.sh'),'--version','v'+VERSION,'--','--bin-dir',str(self.bin_dir),'--font-dir',str(self.font_dir)]
         result = subprocess.run(command,env=self.env,capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertTrue(self.font_dir.joinpath('ShellBuddyIcons.ttf').exists())
@@ -114,16 +115,16 @@ class Release(unittest.TestCase):
         # Shadow only the download function; extraction, hash verification and
         # the bundled installer run for real. No host font registration occurs.
         harness = self.directory/'bootstrap-test.ps1'
-        harness.write_text('''param([string]$Installer,[string]$Fixture,[string]$BinDir)
+        harness.write_text('''param([string]$Installer,[string]$Fixture,[string]$BinDir,[string]$Version)
 $ErrorActionPreference = 'Stop'
 function Invoke-WebRequest {
     param([string]$Uri,[string]$OutFile)
     $name = ([uri]$Uri).Segments[-1]
     Copy-Item -LiteralPath (Join-Path $Fixture $name) -Destination $OutFile
 }
-& $Installer -Version v0.1.0 -BinDir $BinDir -NoFont
+& $Installer -Version $Version -BinDir $BinDir -NoFont
 ''',encoding='utf-8')
-        command = ['pwsh','-NoLogo','-NoProfile','-File',str(harness),'-Installer',str(ROOT/'install.ps1'),'-Fixture',str(self.archive.parent),'-BinDir',str(self.bin_dir)]
+        command = ['pwsh','-NoLogo','-NoProfile','-File',str(harness),'-Installer',str(ROOT/'install.ps1'),'-Fixture',str(self.archive.parent),'-Version','v'+VERSION,'-BinDir',str(self.bin_dir)]
         result = subprocess.run(command,capture_output=True,text=True,timeout=30)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertEqual(self.bin_dir.joinpath('shell-buddy.exe').read_bytes(),BINARY.read_bytes())

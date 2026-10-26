@@ -1,6 +1,6 @@
 # Release checklist
 
-Version is stored in `src/version.txt`. The initial release target is `v0.1.0`.
+Version is stored in `src/version.txt`. The current release target is `v0.2.0`.
 
 1. Update that version, matching `docs/releases/vX.Y.Z.md`, and review all intended source changes.
 2. Run native tests and installer checks: `zig build test`, `zig build -Doptimize=small`, `python3 tests/integration.py`, `python3 tests/release.py`, `python3 tests/benchmark.py`. Verify the font with `python3 tests/fonts.py` in an environment containing `tools/font-requirements.txt`.

@@ -2,7 +2,7 @@
 
 [English](install.md) · [项目首页](../README.zh-CN.md)
 
-可安装预编译的 [v0.1.0 发布包](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.1.0)，也可使用 Zig 0.17.0 从源码构建。
+可安装预编译的 [v0.2.0 发布包](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)，也可使用 Zig 0.17.0 从源码构建。
 
 ## 从当前源码安装
 
@@ -31,8 +31,8 @@ $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 macOS / Linux：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.1.0/install.sh -o /tmp/shell-buddy-install.sh
-sh /tmp/shell-buddy-install.sh --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.sh -o /tmp/shell-buddy-install.sh
+sh /tmp/shell-buddy-install.sh --version v0.2.0
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -40,8 +40,8 @@ Windows PowerShell 7.4+：
 
 ```powershell
 $installer = Join-Path ([IO.Path]::GetTempPath()) 'shell-buddy-install.ps1'
-Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.1.0/install.ps1 -OutFile $installer
-pwsh -File $installer -Version v0.1.0
+Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.ps1 -OutFile $installer
+pwsh -File $installer -Version v0.2.0
 $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 ```
 
@@ -71,7 +71,7 @@ $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 POSIX 安装器支持 `--bin-dir <目录>`、`--font-dir <目录>` 和 `--no-font`；使用下载器时放在 `--` 后面：
 
 ```sh
-sh /tmp/shell-buddy-install.sh --version v0.1.0 -- --bin-dir "$HOME/.local/bin" --no-font
+sh /tmp/shell-buddy-install.sh --version v0.2.0 -- --bin-dir "$HOME/.local/bin" --no-font
 ```
 
 PowerShell 对应参数为 `-BinDir`、`-FontDir`、`-NoFont`。本地安装器另提供 `-SkipFontRegistration`，仅复制字体文件而不写注册表。
@@ -88,13 +88,13 @@ PowerShell 对应参数为 `-BinDir`、`-FontDir`、`-NoFont`。本地安装器�
 
 持久启用时，由你将 PATH 和初始化命令写入 Shell 启动文件。`eval` 将输出的函数与按键绑定加载到当前会话，不会写入启动文件。仅构建、安装或执行 `restart` 不会加载这些绑定。
 
-运行 `shell-buddy init` 配置本地/云端模型、凭据与图标偏好。该向导**不下载任何文件**。没有模型时，规则与已有缓存仍可使用。
+运行 `shell-buddy init` 配置本地/云端模型、凭据与输入样式。该向导**不下载任何文件**。没有模型时，规则与已有缓存仍可使用。
 
-## 启用蜥蜴
+## 启用圆角输入
 
-即使字体已经安装，默认图标仍为 `✦`。字体安装不能保证终端会自动使用它。按照[字体指南](../fonts/README.zh-CN.md)设置字符映射，或为现有等宽字体副本添加图标，再在 `shell-buddy init` 选择 `lizard`；也可设置 `"icon": "lizard"` 后运行 `shell-buddy restart`。
+v0.2.0 使用单个金色 `❯`，默认 `"input_style": "square"`，无需额外字体。圆角需要 **Shell Buddy Icons 1.1+**；按[字体指南](../fonts/README.zh-CN.md)安装并配置 U+F5001–U+F5006，或为现有等宽字体重新生成副本，再在 `shell-buddy init` 选择 `rounded`。已有仅含蜥蜴的旧字体需要更新。v0.1.0 使用此前的图标界面。
 
-不要把只有符号的字体选作主文字字体。SSH 场景中，需要在显示画面的本地终端机器上安装和设置字体。
+不要把只有符号的字体选作主文字字体。SSH 场景中，需要在本地终端机器上配置字体。字体缺失时显式选择 square，程序不会自动检测或修改字体设置。
 
 ## 更新与卸载
 

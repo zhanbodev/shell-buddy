@@ -25,4 +25,4 @@ if (-not $NoFont) {
 Write-Output "Shell Buddy $version installed: $BinDir\shell-buddy.exe"
 Write-Output 'Add that directory to PATH, then: shell-buddy init powershell | Out-String | Invoke-Expression'
 Write-Output 'Configure models: shell-buddy init'
-Write-Output 'Shell profiles and terminal settings were not modified. Default icon: star.'
+Write-Output 'Shell profiles and terminal settings were not modified. Default input style: square.'

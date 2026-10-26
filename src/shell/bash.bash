@@ -7,19 +7,14 @@ if [[ $- == *i* ]] && (( BASH_VERSINFO[0] >= 5 )); then
 __shell_buddy_dispatch() {
   # Bash 5 exposes READLINE_POINT as a character offset in the current locale.
   # Keep that locale so slicing does not split UTF-8 before an ordinary '/'.
-  local kind=$1 result rc=0 next=redraw-current-line map line_prompt
+  local kind=$1 result rc=0 next=redraw-current-line map
   if [[ $kind == slash ]]; then
     READLINE_LINE=${READLINE_LINE:0:READLINE_POINT}/${READLINE_LINE:READLINE_POINT}
     (( READLINE_POINT += 1 ))
   fi
   if [[ $READLINE_LINE =~ ^[[:space:]]*// ]] && { [[ $kind == enter ]] || [[ $READLINE_LINE == // ]]; }; then
-    # bind -x clears Readline's visible line before invoking us. Restore only
-    # the final prompt line, omitting Readline's nonprinting marker bytes.
-    line_prompt=${PS1@P}
-    line_prompt=${line_prompt##*$'\n'}
-    line_prompt=${line_prompt//$'\001'/}
-    line_prompt=${line_prompt//$'\002'/}
-    printf '%s' "$line_prompt" >&2
+    # Readline clears its visible line before bind -x. The child owns that row;
+    # Readline redraws the native prompt after the callback returns.
     if result=$("${SHELL_BUDDY_BIN:-shell-buddy}" edit --shell bash --initial "$READLINE_LINE" --inline-left ""); then
       rc=0
     else

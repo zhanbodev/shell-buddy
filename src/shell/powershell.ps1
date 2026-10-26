@@ -11,13 +11,15 @@ function Invoke-ShellBuddyEdit {
         [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
         $result = & $binary edit --shell powershell --initial $Line --inline-left ($Line.Substring(0, $Cursor))
         $code = $LASTEXITCODE
+        if ($code -in 0, 10, 20) {
+            [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $Line.Length, ($result -join "`n"))
+        }
     } finally {
         [Console]::OutputEncoding = $savedEncoding
+        # Restore arbitrary native prompt functions, including themed prompts.
+        [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
     }
-    if ($code -in 0, 10, 20) {
-        [Microsoft.PowerShell.PSConsoleReadLine]::Replace(0, $Line.Length, ($result -join "`n"))
-        if ($code -eq 10) { [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine() }
-    }
+    if ($code -eq 10) { [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine() }
 }
 Set-PSReadLineKeyHandler -Key '/' -ScriptBlock {
     [Microsoft.PowerShell.PSConsoleReadLine]::Insert('/')

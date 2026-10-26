@@ -14,4 +14,4 @@ if (-not $SkipRegistration) {
     New-ItemProperty -Path $registry -Name 'Shell Buddy Icons (TrueType)' -Value $target -PropertyType String -Force | Out-Null
 }
 Write-Output "Installed for current user: $target"
-Write-Output 'Restart your terminal. Configure a patched primary font before enabling icon: lizard.'
+Write-Output 'Restart your terminal. Configure a patched primary font before enabling input_style: rounded.'

@@ -4,9 +4,10 @@
   <rect width="1080" height="272" rx="8" fill="#0D1319"/>
   <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="25">
     <text x="60" y="78" fill="#86949F">~/projects</text>
-    <text x="60" y="134" fill="#2DD4BF">❯</text>
-    <text x="98" y="134" fill="#2DD4BF">✦</text>
-    <text x="136" y="134" fill="#F0F4F7">create file hello.txt</text>
-    <text x="98" y="184" fill="#8D9AA5">touch './hello.txt'</text>
+    <rect x="60" y="102" width="960" height="44" fill="#222119"/>
+    <text x="60" y="134" fill="#E9BF66">❯</text>
+    <text x="105" y="134" fill="#F0F4F7">create file hello.txt</text>
+    <text x="105" y="184" fill="#F0F4F7">touch './hello.txt'</text>
+    <text x="105" y="228" fill="#8D9AA5" font-size="18">Tab another  Enter accept</text>
   </g>
 </svg>

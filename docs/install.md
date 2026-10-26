@@ -2,7 +2,7 @@
 
 [简体中文](install.zh-CN.md) · [Project](../README.md)
 
-Install a prebuilt [v0.1.0 release](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.1.0), or build from source with Zig 0.17.0.
+Install a prebuilt [v0.2.0 release](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0), or build from source with Zig 0.17.0.
 
 ## From this checkout
 
@@ -31,8 +31,8 @@ The download installer chooses the current OS and architecture, downloads a rele
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.1.0/install.sh -o /tmp/shell-buddy-install.sh
-sh /tmp/shell-buddy-install.sh --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.sh -o /tmp/shell-buddy-install.sh
+sh /tmp/shell-buddy-install.sh --version v0.2.0
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -40,8 +40,8 @@ Windows PowerShell 7.4+:
 
 ```powershell
 $installer = Join-Path ([IO.Path]::GetTempPath()) 'shell-buddy-install.ps1'
-Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.1.0/install.ps1 -OutFile $installer
-pwsh -File $installer -Version v0.1.0
+Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.ps1 -OutFile $installer
+pwsh -File $installer -Version v0.2.0
 $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 ```
 
@@ -71,7 +71,7 @@ Linux ARM and Windows ARM are not included in the initial release matrix. Linux 
 The POSIX installers accept `--bin-dir <directory>`, `--font-dir <directory>`, and `--no-font`. When using the download installer, put these after `--`:
 
 ```sh
-sh /tmp/shell-buddy-install.sh --version v0.1.0 -- --bin-dir "$HOME/.local/bin" --no-font
+sh /tmp/shell-buddy-install.sh --version v0.2.0 -- --bin-dir "$HOME/.local/bin" --no-font
 ```
 
 PowerShell installers accept `-BinDir`, `-FontDir`, and `-NoFont`. Local installations can additionally use `-SkipFontRegistration` for a file-only font copy.
@@ -88,13 +88,13 @@ Once the binary directory is on PATH:
 
 For persistence, add the PATH entry and initialization command to your own shell startup file. `eval` loads the printed functions and bindings into the current shell; it does not write your startup file. Building, installing, or running `restart` alone does not load these bindings.
 
-Run `shell-buddy init` to configure a local/cloud model, credentials, and icon preference. This wizard **downloads nothing**. Rules and existing cache still work without a model.
+Run `shell-buddy init` to configure a local/cloud model, credentials, and input style. This wizard **downloads nothing**. Rules and existing cache still work without a model.
 
-## Enable the lizard
+## Enable rounded input
 
-The default icon remains `✦`, even when the font is installed. Installing a font cannot guarantee that a terminal uses it. Configure a per-character mapping or patch a copy of your usual monospace font, following the [font guide](../fonts/README.md), then choose `lizard` in `shell-buddy init` or set `"icon": "lizard"` and run `shell-buddy restart`.
+Version 0.2.0 uses one gold `❯`, with `"input_style": "square"` by default and no font dependency. Rounded input needs **Shell Buddy Icons 1.1+**. Follow the [font guide](../fonts/README.md) to map U+F5001–U+F5006 or patch a new copy of your monospace font, then choose `rounded` in `shell-buddy init`. An older mascot-only font must be updated. Version 0.1.0 used the earlier icon interface.
 
-Do not select the symbol-only font as your main text font. Fonts are rendered on the local terminal machine, including when the program runs over SSH.
+Do not select the symbol-only font as your main text font. Fonts are rendered on the local terminal machine, including over SSH. Select square if glyphs are unavailable; the app does not detect or modify terminal fonts.
 
 ## Upgrade or remove
 

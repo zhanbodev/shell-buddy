@@ -7,11 +7,11 @@
 用自然语言生成 Shell 命令。Zig 0.17.0 编写，单个可执行文件，无第三方运行时，仅在 `//` 输入模式期间运行。
 
 ```text
-✦ 创建 hello.txt 文件
-  touch './hello.txt'
+❯  创建 hello.txt 文件
+   touch './hello.txt'
 ```
 
-命令在描述下方以灰字独立显示，描述和命令均按当前终端宽度自动折行。Tab 清空下方显示，在星形位置播放一圈 480ms 旋转动效，然后显示其他候选；切换期间不能接受隐藏的旧候选。Enter 将建议替换为当前行，供继续编辑；再按 Enter 由当前 Shell 执行。macOS 的 Cmd+Enter、Windows/Linux 的 Ctrl+Enter 可接受完整候选并直接执行。Esc 保留描述并退出，Ctrl+C 清空退出。流式输出完成前不能接受或执行。
+完整命令在描述下方独立显示，流式预览使用较淡文字，描述和命令均按当前终端宽度自动折行。Tab 清空下方显示，提示符播放 480ms 明暗变化，然后显示其他候选；切换期间不能接受隐藏的旧候选。Enter 将建议替换为当前行，供继续编辑；再按 Enter 由当前 Shell 执行。macOS 的 Cmd+Enter、Windows/Linux 的 Ctrl+Enter 可接受完整候选并直接执行。Esc 保留描述并退出，Ctrl+C 清空退出。流式输出完成前不能接受或执行。
 
 ## 构建与启用
 
@@ -63,21 +63,19 @@ usage: shell-buddy llm <profile>
   - cloud  Use the cloud model service
 ```
 
-行首键入 `//` 后，触发符在原位置默认变为普通青色 `✦`；安装并配置自定义字体、设置 `icon: "lizard"` 后显示本项目的蜥蜴，继续在原位置输入描述，长描述自动折行。AI 候选与错误显示在描述下方，并随分屏宽度重新排版；超出窗口高度时显示光标附近的描述和带省略号的候选预览，接受时仍使用完整命令。生成时仅图标轻微明暗呼吸，周期约两秒；流式预览更淡，完整候选显示灰字。空输入只显示图标，不附加标签、箭头或按键说明；错误时图标变黄，并保留具体原因。动画不产生额外模型请求。
+行首键入 `//` 后，程序临时接管当前输入行，统一显示一个金色 `❯` 和低对比度底色，兼容原提示符为 `$`、`%`、`>` 或主题自定义文本的情况。上方多行主题的路径/Git 信息保留；单行主题所在行在 AI 模式中临时替换，退出后由 Shell 恢复原样。程序不修改提示符函数或 Shell 配置。
 
-图标仅用于显示，无需手动输入，接受或取消后不会写入命令文本。描述与候选按终端宽度折行，窗口高度不足时显示可视区域。Zig 只重绘当前输入区域，保留原提示符及其前面的目录等信息。普通命令仍由原生编辑器处理。在模式中支持 UTF-8 中文、方向键、Home/End、Backspace/Delete、Ctrl+A/E/U/W 和括号粘贴。直接粘贴整条 `// 描述` 后，按 Enter 进入生成模式。
+空输入显示 `What do you need?`，不进入真实输入缓冲区。输入描述后占位提示消失；生成和 Tab 换版仅改变提示符亮度。未完成的结果显示较淡，完整命令使用终端前景色，足够宽的窗口会显示 `Tab another  Enter accept`。描述和候选按终端宽度换行，窗口较矮时保持光标可见，接受始终返回完整命令。支持中文、基础编辑、括号粘贴和终端恢复。
 
 更新二进制后，可重新执行 `eval "$(shell-buddy init zsh)"` 来更新当前会话的绑定；该命令不会写入 `.zshrc`。如果仍在旧版生成界面中，先按 Ctrl+C 退出，再执行初始化。
 
 Zsh 集成兼容 `zsh-autosuggestions` 与 `zsh-syntax-highlighting`。如果旧版初始化后 Enter 不再提交命令，请先打开一个新终端，再初始化新版；旧会话的按键绑定不会因为二进制更新而自动恢复。
 
-## 终端图标
+## 输入样式
 
-配置项 `icon` 默认 `"star"`，普通星星无需额外字体。选择 `"lizard"` 才使用[本项目的蜥蜴字体](../fonts/README.zh-CN.md)，字符位 U+F5000。先安装并在终端配置好字体，再主动开启；旧 `nerd_font` 字段不再启用图标。向导保存时会清理旧字段，模型切换不改动图标选择。
+`input_style` 默认 `"square"`，无需字体依赖。`"rounded"` 使用 **Shell Buddy Icons 1.1+** 的 U+F5001–U+F5006 端帽字形模拟圆角；多行输入使用顶部/底部圆角和直边。先配置终端字体，再开启圆角；旧 `icon`、`nerd_font` 设置忽略，向导保存时清理。
 
-`init` 在密钥输入之后列出 `star` 与 `lizard`，Tab 切换、Enter 确认；首次默认星星，重新配置时保留已有明确选择，取消不保存。手动修改 JSON 后运行 `shell-buddy restart`，已打开的编辑器会更新。`doctor` 显示有效值。
-
-程序无法可靠判断本地或远程终端正在使用的字体，不会自动安装字体或更改终端设置。字体缺字时切回 `star`。完整安装方式及现有等宽字体补丁工具见[字体指南](../fonts/README.zh-CN.md)。
+`init` 在密钥步骤后提供 square/rounded 选择，Tab 切换、Enter 确认。首次默认 square，已有明确选择会保留。手动修改 JSON 后运行 `shell-buddy restart`，`doctor` 显示有效值。程序无法自动检测字体覆盖，缺字时请回到 square。[字体配置与升级 →](../fonts/README.zh-CN.md)
 
 ## 模型配置
 
@@ -90,7 +88,7 @@ Zsh 集成兼容 `zsh-autosuggestions` 与 `zsh-syntax-highlighting`。如果旧
 # 已加入 PATH 后：shell-buddy init
 ```
 
-向导逐行展示 `local`、`cloud` 和说明，Tab 切换选择，Enter 确认；随后填写兼容接口的 Base URL、模型名称与 API key，最后选择终端图标 `star` 或 `lizard`。已有地址和模型会预填，可直接编辑。密钥输入隐藏；已有密钥时按 Enter 保留，本地无鉴权服务可留空。Esc、Ctrl+C 或 Ctrl+D 在保存前取消，不改动配置。向导不自动调用模型或验证密钥是否有效；可用 `suggest --generate` 检查服务。
+向导逐行展示 `local`、`cloud` 和说明，Tab 切换选择，Enter 确认；随后填写兼容接口的 Base URL、模型名称与 API key，最后选择输入样式 `square` 或 `rounded`。已有地址和模型会预填，可直接编辑。密钥输入隐藏；已有密钥时按 Enter 保留，本地无鉴权服务可留空。Esc、Ctrl+C 或 Ctrl+D 在保存前取消，不改动配置。向导不自动调用模型或验证密钥是否有效；可用 `suggest --generate` 检查服务。
 
 配置和密钥分开保存：
 
@@ -142,7 +140,7 @@ shell-buddy llm cloud # 切换到云端模型
       "api_key_env": "SHELL_BUDDY_API_KEY"
     }
   },
-  "icon": "star",
+  "input_style": "square",
   "debounce_ms": 150,
   "max_tokens": 2048,
   "timeout_ms": 8000
