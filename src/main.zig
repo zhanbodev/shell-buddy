@@ -8,6 +8,7 @@ const control = @import("control.zig");
 const builtin = @import("builtin");
 const setup = @import("setup.zig");
 const model = @import("model.zig");
+const updater = @import("update.zig");
 
 pub fn main(init: std.process.Init) void {
     const code = run(init) catch |err| {
@@ -29,7 +30,8 @@ fn run(init: std.process.Init) !u8 {
             "   start              Enable command suggestions\n" ++
             "   stop               Disable suggestions and cancel active requests\n" ++
             "   restart            Reload configuration and enable suggestions\n" ++
-            "   status             Show state and configuration path\n\n" ++
+            "   status             Show state and configuration path\n" ++
+            "   update             Upgrade to the latest stable release\n\n" ++
             "Configure and inspect models\n" ++
             "   llm <profile>      Select an LLM profile\n" ++
             "   config-example     Print an example configuration\n" ++
@@ -46,6 +48,10 @@ fn run(init: std.process.Init) !u8 {
         return 0;
     }
     if (args.len == 3 and std.mem.eql(u8, args[2], "--help")) {
+        if (std.mem.eql(u8, args[1], "update")) {
+            try output(init.io, updater.help);
+            return 0;
+        }
         if (std.mem.eql(u8, args[1], "llm")) {
             try output(init.io, profile_help);
             return 0;
@@ -73,6 +79,7 @@ fn run(init: std.process.Init) !u8 {
         };
         return error.UnknownCommand;
     }
+    if (std.mem.eql(u8, args[1], "update")) return updater.run(init, args[2..]);
     if (std.mem.eql(u8, args[1], "config-example")) {
         try output(init.io, config.example);
         return 0;
@@ -262,4 +269,6 @@ test {
     std.testing.refAllDecls(@import("terminal.zig"));
     std.testing.refAllDecls(@import("credentials.zig"));
     std.testing.refAllDecls(@import("setup.zig"));
+    std.testing.refAllDecls(@import("ui.zig"));
+    std.testing.refAllDecls(updater);
 }

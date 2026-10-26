@@ -2,7 +2,7 @@
 
 [简体中文](install.zh-CN.md) · [Project](../README.md)
 
-Install a prebuilt [v0.2.0 release](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0), or build from source with Zig 0.17.0.
+Install a prebuilt [v0.2.1 release](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.1), or build from source with Zig 0.17.0.
 
 ## From this checkout
 
@@ -31,8 +31,8 @@ The download installer chooses the current OS and architecture, downloads a rele
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.sh -o /tmp/shell-buddy-install.sh
-sh /tmp/shell-buddy-install.sh --version v0.2.0
+curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.1/install.sh -o /tmp/shell-buddy-install.sh
+sh /tmp/shell-buddy-install.sh --version v0.2.1
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -40,8 +40,8 @@ Windows PowerShell 7.4+:
 
 ```powershell
 $installer = Join-Path ([IO.Path]::GetTempPath()) 'shell-buddy-install.ps1'
-Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.ps1 -OutFile $installer
-pwsh -File $installer -Version v0.2.0
+Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.1/install.ps1 -OutFile $installer
+pwsh -File $installer -Version v0.2.1
 $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 ```
 
@@ -71,7 +71,7 @@ Linux ARM and Windows ARM are not included in the initial release matrix. Linux 
 The POSIX installers accept `--bin-dir <directory>`, `--font-dir <directory>`, and `--no-font`. When using the download installer, put these after `--`:
 
 ```sh
-sh /tmp/shell-buddy-install.sh --version v0.2.0 -- --bin-dir "$HOME/.local/bin" --no-font
+sh /tmp/shell-buddy-install.sh --version v0.2.1 -- --bin-dir "$HOME/.local/bin" --no-font
 ```
 
 PowerShell installers accept `-BinDir`, `-FontDir`, and `-NoFont`. Local installations can additionally use `-SkipFontRegistration` for a file-only font copy.
@@ -98,6 +98,20 @@ Do not select the symbol-only font as your main text font. Fonts are rendered on
 
 ## Upgrade or remove
 
-To upgrade, run the installer for a newer published version, then re-run your shell initialization command in existing sessions. Configuration and credentials are preserved. Run `shell-buddy restart` to validate and reload configuration.
+```sh
+shell-buddy update          # Install the latest stable GitHub release
+shell-buddy update --check  # Report availability without writing files
+shell-buddy update --no-font
+```
+
+This command uses Zig's HTTP/TLS client, verifies the release archive against `SHA256SUMS`, checks bundle metadata, and runs the staged executable's `--version` before replacing the executable you invoked. It needs neither Zig, Python, nor curl. It never downgrades or installs prereleases. Each download times out after 30 seconds. Download, checksum, and validation failures preserve the installed executable.
+
+Custom installation paths are supported, provided their parent directory is writable. A sibling `.update.lock` serializes upgrades. On Windows a running executable is renamed to `.previous` before replacement; an old backup may remain until the process exits and is cleaned up by the next upgrade. Managed/system installations without write permission should use their installer or package manager.
+
+The bundled symbol font is updated in its default current-user directory unless `--no-font` is specified. A font installation failure is reported separately after a successful program upgrade. Custom font directories and patched text fonts must be updated manually; terminal font settings are never changed.
+
+Configuration, credentials, cache, enabled/stopped state, PATH, and shell startup files are preserved. Reload your shell initialization command in existing sessions after upgrading. `shell-buddy restart` only validates/reloads configuration; it does not download updates or reload shell bindings.
+
+`update` is available in v0.2.1+. When upgrading from v0.2.0, run the installer once; subsequent upgrades can use this command.
 
 To remove, delete the installed executable, remove your own PATH/init entries, and uninstall **Shell Buddy Icons** through your OS font manager. Remove `~/.config/shell-buddy` separately only if you also want to erase configuration, credentials, and cache.

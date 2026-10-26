@@ -14,6 +14,7 @@ Register-ArgumentCompleter -Native -CommandName shell-buddy -ScriptBlock {
             @('stop', 'Disable suggestions and cancel active requests'),
             @('restart', 'Reload configuration and enable suggestions'),
             @('status', 'Show state and configuration path'),
+            @('update', 'Upgrade to the latest stable release'),
             @('llm', 'Select an LLM profile'),
             @('suggest', 'Print a suggestion without executing it'),
             @('edit', 'Open the inline editor'),
@@ -31,6 +32,8 @@ Register-ArgumentCompleter -Native -CommandName shell-buddy -ScriptBlock {
         $entries = @(@('bash', 'Bash 5 or later'), @('zsh', 'Zsh 5.8 or later'), @('powershell', 'PowerShell 7.4 or later'))
     } elseif ($previous -in '--intent', '--initial') {
         return
+    } elseif ($command -eq 'update') {
+        $entries = @(@('--check', 'Check for updates without changing files'), @('--no-font', 'Skip updating the bundled symbol font'), @('--help', 'Show command help'))
     } elseif ($command -in 'suggest', 'edit') {
         $entries = @(@('--shell', 'Select the target shell'), @('--help', 'Show command help'))
         if ($command -eq 'suggest') {

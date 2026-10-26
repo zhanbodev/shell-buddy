@@ -30,7 +30,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 支持 **Zsh 5.8+**、**Bash 5+**，以及配合 PSReadLine 2.3.6+ 的 **PowerShell 7.4+**。macOS 自带的 Bash 3.2 不受支持，默认 Zsh 可直接使用。
 
-下载 **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)**，支持 macOS（Apple Silicon / Intel）、Linux x86_64 和 Windows x86_64，发布包包含程序、吉祥物字体和安装器。[预编译包安装 →](docs/install.zh-CN.md#从公开发布包安装)
+下载 **[v0.2.1](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.1)**，支持 macOS（Apple Silicon / Intel）、Linux x86_64 和 Windows x86_64，发布包包含程序、吉祥物字体和安装器。[预编译包安装 →](docs/install.zh-CN.md#从公开发布包安装)
 
 在当前会话启用 Shell Buddy：
 
@@ -50,13 +50,24 @@ shell-buddy init
 
 需要持久启用时，把初始化命令写入 Shell 启动文件，并使用二进制的绝对路径。安装器不会修改启动文件或终端设置。[安装与平台支持 →](docs/install.zh-CN.md)
 
+## 升级
+
+```sh
+shell-buddy update          # 安装最新稳定版
+shell-buddy update --check  # 只检查，不修改文件
+```
+
+升级前校验 SHA-256，再替换当前运行的程序，同时更新内置符号字体；配置和凭据保留。可用 `--no-font` 跳过字体，升级后在已有会话中重新加载 Shell 初始化命令。[升级说明 →](docs/install.zh-CN.md#更新与卸载)
+
+此命令从 v0.2.1 开始提供。v0.2.0 用户先运行一次安装脚本，之后即可使用 `shell-buddy update` 升级。
+
 ## 随手输入，确认执行
 
 只有行首的 `//` 会触发 Shell Buddy。描述在上，命令建议在下，均按分屏宽度自动换行。
 
 | 按键 | 行为 |
 | --- | --- |
-| Tab | 显示另一个建议，提示符短暂明暗变化 |
+| Tab | 显示另一个建议 |
 | Enter | 将完整命令放回命令行，供确认或继续编辑 |
 | 再按 Enter | 交给当前 Shell 执行 |
 | macOS Cmd+Enter / Windows、Linux Ctrl+Enter | 接受并执行，需[配置终端按键](examples/terminal-keys.md) |
@@ -67,7 +78,9 @@ shell-buddy init
 
 ## AI 输入
 
-输入 `//` 后，Shell Buddy 临时接管当前输入行，统一显示金色 `❯` 和低对比度底色；空输入提示 `What do you need?`，输入后自动消失。生成与 Tab 换版只改变提示符亮度；完整命令就绪后显示确认提示。接受或取消后恢复用户原有提示符，上方的多行主题信息保持不变。
+输入 `//` 后，Shell Buddy 临时接管当前输入行，统一显示金色 `❯` 和低对比度底色；空输入提示 `What do you need?`，输入后自动消失。模型生成时，箭头在原位置变为npm 风格的金色点阵转圈，仍只占一格；完成、失败或取消请求后恢复箭头。入场动画期间暂时隐藏光标，开始输入后立即恢复到编辑位置，避免绘制时抖动。完整命令就绪后显示确认提示。接受或取消后恢复用户原有提示符，上方的多行主题信息保持不变。
+
+进入时，背景在 720ms 内从左向右展开，流动亮核、较大的火花与渐暗拖尾紧贴移动前沿，短暂聚拢、喷散后收束。展开结束后粒子全部消失，恢复完整宽度的普通背景块。输入、粘贴或缩放会立即结束动画；生成与 Tab 换版不会重新出现粒子。
 
 默认 `"input_style": "square"`，无需额外字体。使用 **Shell Buddy Icons 1.1+** 并配置终端字体后，可在 `shell-buddy init` 选择 `rounded`，或设置 `"input_style": "rounded"` 后运行 `restart`。旧 `icon`、`nerd_font` 设置不再显示额外图标。[圆角字体配置 →](fonts/README.zh-CN.md)
 
@@ -91,6 +104,7 @@ shell-buddy doctor
 | `shell-buddy start` / `stop` | 启用建议，或停用并取消正在生成的请求 |
 | `shell-buddy restart` | 校验并重新加载配置，然后启用建议 |
 | `shell-buddy status` | 查看状态与配置路径 |
+| `shell-buddy update` | 升级程序和内置符号字体 |
 | `shell-buddy cache-clear` | 清空已确认命令缓存 |
 
 无需后台服务。使用同一配置目录的终端共享状态变更。
@@ -124,11 +138,17 @@ $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 ```sh
 zig build -Doptimize=small
 zig build test
+zig build build-update-tests -Doptimize=small
+python3 tests/update.py
 python3 tests/integration.py
 python3 tests/benchmark.py
 python3 tests/release.py
 ```
 
 产物位于 `zig-out/bin/`。集成测试使用本地模拟服务和伪终端，不使用真实凭据。Windows 原生 PowerShell 测试位于 `tests/windows_terminal.py`；[CI](.github/workflows/ci.yml) 定义各平台检查。
+
+## 许可证
+
+采用 [MIT 许可证](LICENSE)开源。版权所有 © 2026 梁展波（Liang Zhanbo），Nuclx Tech 创始人；版权归作者个人所有。
 
 [中文指南](docs/guide.zh-CN.md) · [安装](docs/install.zh-CN.md) · [品牌与吉祥物](docs/brand/README.md) · [English](README.md)

@@ -12,6 +12,7 @@ __shell_buddy_complete() {
       'stop:Disable suggestions and cancel active requests'
       'restart:Reload configuration and enable suggestions'
       'status:Show state and configuration path'
+      'update:Upgrade to the latest stable release'
       'llm:Select an LLM profile'
       'suggest:Print a suggestion without executing it'
       'edit:Open the inline editor'
@@ -27,6 +28,8 @@ __shell_buddy_complete() {
     entries=('bash:Bash 5 or later' 'zsh:Zsh 5.8 or later' 'powershell:PowerShell 7.4 or later')
   elif [[ $previous == --intent || $previous == --initial ]]; then
     return 0
+  elif [[ $command == update ]]; then
+    entries=('--check:Check for updates without changing files' '--no-font:Skip updating the bundled symbol font' '--help:Show command help')
   elif [[ $command == suggest ]]; then
     entries=('--shell:Select the target shell' '--intent:Describe the command' '--generate:Request the selected model' '--timings:Print model latency' '--help:Show command help')
   elif [[ $command == edit ]]; then

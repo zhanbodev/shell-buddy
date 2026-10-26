@@ -68,6 +68,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
     var cursor = len;
     var term = try terminal.Terminal.open(io);
     defer term.close();
+    try term.write("\x1b[?25l");
     if (inline_left) |left| {
         if (left.len > core.max_command or (left.len > 0 and !core.validText(left))) return error.InvalidIntent;
         try term.beginInline(core.width(left));
@@ -89,10 +90,12 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
     var decoder: terminal.Decoder = .{};
     var escape_at: i64 = 0;
     var pasting = false;
-    var last_hash: ?u64 = null;
+    var paint_state: PaintState = .{};
     var checked_at = now(io);
     var turn_started: ?i64 = null;
     var replacing = false;
+    var reveal_started: ?i64 = if (len == 0) now(io) else null;
+    const opening_columns = term.columns();
 
     while (true) {
         if (term.wasInterrupted()) return .{ .action = .cancel, .text = "" };
@@ -170,7 +173,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             } else {
                 job = makeJob(init, cfg, shell, cwd) catch |err| {
                     status = model.message(err);
-                    try draw(init.gpa, &term, .{ .text = text[0..len], .cursor = cursor, .notice = status, .input_style = cfg.input_style }, &last_hash);
+                    try draw(init.gpa, &term, .{ .text = text[0..len], .cursor = cursor, .notice = status, .input_style = cfg.input_style }, &paint_state);
                     continue;
                 };
                 @memcpy(job.input[0..len], text[0..len]);
@@ -181,6 +184,13 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
                 status = null;
             }
         }
+        if (reveal_started != null and term.columns() != opening_columns) reveal_started = null;
+        const reveal: ?usize = if (reveal_started) |start| value: {
+            const elapsed = now(io) - start;
+            if (elapsed < ui.reveal_ms) break :value @intCast(@divTrunc(elapsed, ui.reveal_tick_ms));
+            reveal_started = null;
+            break :value null;
+        } else null;
         const turn: ?usize = if (turn_started) |start| value: {
             const elapsed = now(io) - start;
             if (elapsed < 480) break :value @intCast(@divTrunc(elapsed, 60));
@@ -201,9 +211,10 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             .notice = if (turn != null) null else status,
             .ready = !replacing and candidates.get() != null,
             .turn = turn,
+            .reveal = reveal,
             .input_style = cfg.input_style,
             .busy = future != null,
-        }, &last_hash);
+        }, &paint_state);
 
         const expired = escape_at != 0 and now(io) - escape_at >= 40;
         const key = decoder.take(expired) orelse {
@@ -215,6 +226,7 @@ pub fn edit(init: std.process.Init, initial_cfg: config.Config, shell: core.Shel
             }
             continue;
         };
+        reveal_started = null;
         var modified = false;
         if (pasting) {
             switch (key) {
@@ -355,21 +367,51 @@ fn remove(text: *[core.max_command]u8, len: *usize, from: usize, to: usize) void
     len.* -= to - from;
 }
 
-fn draw(allocator: std.mem.Allocator, term: *terminal.Terminal, view: ui.View, last: *?u64) !void {
+const PaintState = struct {
+    body_hash: ?u64 = null,
+    marker_hash: ?u64 = null,
+    position: ui.Position = .{ .row = 0, .column = 0, .height = 0 },
+};
+
+fn draw(allocator: std.mem.Allocator, term: *terminal.Terminal, view: ui.View, state: *PaintState) !void {
+    var frame = view;
+    if (view.busy) frame.frame = @intCast(@divTrunc(now(term.io), ui.loading_frame_ms));
+    const columns = term.columns();
+    const rows = term.rows();
+    const body_hash = ui.bodyHash(frame, columns, rows);
+    var marker_buffer: [128]u8 = undefined;
+    var marker = std.Io.Writer.fixed(&marker_buffer);
+    try ui.renderMarker(&marker, frame);
+    const marker_hash = std.hash.Wyhash.hash(0, marker.buffered());
+    if (state.body_hash == body_hash) {
+        if (state.marker_hash == marker_hash) return;
+        // Only the loading frame or local refresh brightness changed. Leave
+        // the input, placeholder, and all suggestion rows completely untouched.
+        var patch_buffer: [256]u8 = undefined;
+        var patch = std.Io.Writer.fixed(&patch_buffer);
+        try patch.writeAll("\x1b[?25l");
+        if (state.position.row > 0) try patch.print("\x1b[{d}A", .{state.position.row});
+        try patch.print("\x1b[{d}G", .{if (view.input_style == .rounded) @as(usize, 2) else 1});
+        try patch.writeAll(marker.buffered());
+        try patch.writeAll("\x1b[0m");
+        if (state.position.row > 0) try patch.print("\x1b[{d}B", .{state.position.row});
+        try patch.print("\x1b[{d}G\x1b[?25h", .{state.position.column + 1});
+        try term.write(patch.buffered());
+        state.marker_hash = marker_hash;
+        return;
+    }
     var output: std.Io.Writer.Allocating = .init(allocator);
     defer output.deinit();
     const w = &output.writer;
-    var frame = view;
-    if (view.busy) frame.frame = @intCast(@divTrunc(now(term.io), 120));
-    const position = try ui.render(w, term.columns(), term.lineColumn(), term.rows(), frame);
-    const hash = std.hash.Wyhash.hash(0, w.buffered());
-    if (last.* == null or last.*.? != hash) {
-        if (term.display_row > 0) {
-            var movement: [32]u8 = undefined;
-            try term.write(try std.fmt.bufPrint(&movement, "\x1b[{d}A", .{term.display_row}));
-        }
-        try term.write(w.buffered());
-        term.display_row = position.row;
-        last.* = hash;
-    }
+    // Hide before any cursor movement, and send the complete frame in one write.
+    // Keep it hidden throughout entry rather than toggling it on every tick.
+    try w.writeAll("\x1b[?25l");
+    if (term.display_row > 0) try w.print("\x1b[{d}A", .{term.display_row});
+    const position = try ui.render(w, columns, term.lineColumn(), rows, frame);
+    if (view.reveal == null or view.text.len != 0) try w.writeAll("\x1b[?25h");
+    try term.write(w.buffered());
+    term.display_row = position.row;
+    state.position = position;
+    state.body_hash = body_hash;
+    state.marker_hash = marker_hash;
 }

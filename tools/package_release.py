@@ -11,6 +11,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
+    'LICENSE',
     'fonts/ShellBuddyIcons.ttf', 'fonts/install.sh', 'fonts/install.ps1',
     'fonts/README.md', 'fonts/README.zh-CN.md', 'fonts/lizard.svg',
     'tools/patch_icon_font.py', 'tools/build_icon_font.py', 'tools/font-requirements.txt', 'tests/fonts.py',
@@ -81,6 +82,8 @@ Add the printed binary directory to PATH, then load the shell integration:
 Configure a model with `shell-buddy init`. Setup downloads nothing.
 Default input style: square. Installing a font does not select it in your terminal.
 See [font setup](fonts/README.md) or [中文字体指南](fonts/README.zh-CN.md) before enabling `input_style: rounded`.
+
+Licensed under the [MIT License](LICENSE).
 
 [Project documentation](https://github.com/zhanbodev/shell-buddy/tree/v{version})
 '''.encode()

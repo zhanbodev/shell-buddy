@@ -28,6 +28,8 @@ jobs:
       - run: zig build test
       - run: zig build -Doptimize=small
       - run: python tests/integration.py
+      - run: zig build build-update-tests -Doptimize=small
+      - run: python tests/update.py
       - run: python tests/release.py
       - name: Windows ConPTY dependencies
         if: runner.os == 'Windows'

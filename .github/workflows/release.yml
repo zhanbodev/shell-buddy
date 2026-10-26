@@ -46,6 +46,8 @@ jobs:
       - run: zig build -Doptimize=small -Dtarget=${{ matrix.target }}
       - run: python tests/integration.py
       - run: python tests/benchmark.py
+      - run: zig build build-update-tests -Doptimize=small
+      - run: python tests/update.py
       - run: python tests/release.py
       - name: Windows interaction dependencies
         if: runner.os == 'Windows'

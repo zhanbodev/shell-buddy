@@ -19,6 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get("SHELL_BUDDY_TEST_BIN", ROOT / "zig-out/bin/shell-buddy")).resolve()
 if os.name == "nt" and not BINARY.exists():
     BINARY = BINARY.with_suffix(".exe")
+LOADING_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def is_ai_prompt(line):
+    return line.startswith(tuple(glyph + " " for glyph in "❯" + LOADING_FRAMES))
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -432,6 +437,17 @@ class CLI(Base):
         self.assertEqual(json.loads(self.directory.joinpath("config.json").read_text())["default"], "local")
         state = json.loads(self.directory.joinpath("state.json").read_text())
         self.assertEqual(state, {"enabled": True, "revision": 6})
+
+    def test_update_help_and_invalid_options_do_not_require_model_config(self):
+        self.directory.joinpath("config.json").write_text("invalid config")
+        result = self.run_cli("update", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--check", result.stdout)
+        self.assertIn("--no-font", result.stdout)
+        self.assertTrue(result.stdout.isascii())
+        result = self.run_cli("update", "--unknown")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage: shell-buddy update", result.stderr)
 
     def test_help_uses_english_descriptions_and_separate_profile_entries(self):
         result = self.run_cli("--help")
@@ -867,12 +883,12 @@ if os.name != "nt":
             path = self.directory / "config.json"
             path.write_text(json.dumps({"input_style": "square"}))
             session = self.session("// 当前路径")
-            session.wait_screen(lambda screen: screen.display[0] == "❯  当前路径" and "pwd" in screen.display[1])
-            self.assertEqual(session.screen.x, 11)
+            session.wait_screen(lambda screen: screen.display[0] == "❯ 当前路径" and "pwd" in screen.display[1])
+            self.assertEqual(session.screen.x, 10)
             path.write_text(json.dumps({"input_style": "rounded"}))
             self.assertEqual(self.run_cli("restart").returncode, 0)
-            session.wait_screen(lambda screen: screen.display[0].startswith("\U000f5001❯  当前路径") and screen.display[0].endswith("\U000f5002") and "pwd" in screen.display[1])
-            self.assertEqual(session.screen.x, 12)
+            session.wait_screen(lambda screen: screen.display[0].startswith("\U000f5001❯ 当前路径") and screen.display[0].endswith("\U000f5002") and "pwd" in screen.display[1])
+            self.assertEqual(session.screen.x, 11)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
 
@@ -883,7 +899,7 @@ if os.name != "nt":
                     self.configure(mode)
                     session = self.session("// 测试服务")
                     session.wait_for(hint)
-                    self.assertTrue(session.screen.display[session.screen.y].startswith("❯  测试服务"))
+                    self.assertTrue(session.screen.display[session.screen.y].startswith("❯ 测试服务"))
                     self.assertNotIn(b"Model request failed", session.log)
                     session.send(b"\x03")
                     self.assertEqual(session.result(), (20, ""))
@@ -893,34 +909,188 @@ if os.name != "nt":
             session = self.session()
             session.wait_for("What do you need?")
             row = session.screen.y
-            self.assertEqual(session.screen.display[row], "❯  What do you need?")
+            self.assertTrue(session.screen.display[row].startswith("❯ What do you need?"))
             session.send("当前路径")
             session.wait_for("pwd")
             self.assertEqual(session.screen.y, row)
-            self.assertEqual(session.screen.display[row], "❯  当前路径")
-            self.assertEqual(session.screen.display[row + 1], "   pwd")
+            self.assertEqual(session.screen.display[row], "❯ 当前路径")
+            self.assertEqual(session.screen.display[row + 1], "  pwd")
             self.assertNotIn("Tab next", session.screen.display[row])
-            self.assertEqual(session.screen.x, 11)
+            self.assertEqual(session.screen.x, 10)
             self.assertIn(b"\x1b[38;2;233;191;102m", session.log)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
             self.assertEqual(termios.tcgetattr(session.master), session.original)
 
-        def test_ai_prompt_pulses_only_while_a_request_is_active(self):
+        def test_entry_particles_follow_front_and_disappear_after_reveal(self):
+            for style in ("square", "rounded"):
+                with self.subTest(style=style):
+                    self.directory.joinpath("config.json").write_text(json.dumps({"input_style": style}))
+                    session = self.session()
+                    session.wait_screen(lambda screen: "What do you need?" in screen.display[0])
+                    widths = lambda: [int(n) for n in re.findall(rb"\x1b\[48;2;34;33;25m\x1b\[(\d+)X", session.log.split(b"\x1b[48;2;34;33;25m\x1b[38;2;229;229;231m")[0])]
+                    session.wait_screen(lambda screen: len(set(widths())) >= 3)
+                    self.assertEqual(widths(), sorted(widths()))
+                    final_background = b"\x1b[48;2;34;33;25m\x1b[38;2;229;229;231m"
+                    session.wait_screen(lambda screen: final_background in session.log and "What do you need?" in screen.display[0] and not any(
+                        0x2800 <= ord(c) <= 0x28ff for c in "".join(screen.display)))
+                    self.assertEqual(session.screen.x, 3 if style == "rounded" else 2)
+                    self.assertEqual(session.screen.y, 0)
+                    self.assertTrue(session.screen.cursor_visible)
+                    self.assertEqual(session.screen.visible_cursor_moves, 0)
+                    self.assertEqual(session.screen.text_mutations, 0, "entry animation erased or replaced placeholder letters")
+                    self.assertNotIn(b"\x1b[?25h", session.log.split(final_background)[0])
+                    self.assertTrue(all(not line for line in session.screen.display[1:]))
+                    self.assertIn(b"\x1b[38;2;233;191;102m", session.log)
+                    self.assertFalse(select.select([session.master], [], [], 0.08)[0], "idle animation kept repainting")
+                    session.send(b"\x03")
+                    self.assertEqual(session.result(), (20, ""))
+                    self.assertEqual(termios.tcgetattr(session.master), session.original)
+
+        def test_entry_cursor_restores_immediately_on_input_and_on_early_exit(self):
+            session = self.session()
+            session.wait_screen(lambda screen: "What do you need?" in screen.display[0])
+            session.send("当前路径")
+            session.wait_screen(lambda screen: screen.cursor_visible and screen.display[0] == "❯ 当前路径" and "pwd" in screen.display[1])
+            self.assertEqual(session.screen.x, 10)
+            self.assertEqual(session.screen.visible_cursor_moves, 0)
+            session.send(b"\x03")
+            self.assertEqual(session.result(), (20, ""))
+            self.assertTrue(session.screen.cursor_visible)
+            for action in (b"\x03", b"\x1b", "terminate"):
+                with self.subTest(action=action):
+                    early = self.session()
+                    early.wait_screen(lambda screen: "What do you need?" in screen.display[0])
+                    if action == "terminate":
+                        os.kill(early.pid, signal.SIGTERM)
+                    else:
+                        early.send(action)
+                    self.assertEqual(early.result(), (20, ""))
+                    self.assertTrue(early.screen.cursor_visible)
+                    self.assertEqual(early.screen.visible_cursor_moves, 0)
+                    self.assertEqual(termios.tcgetattr(early.master), early.original)
+
+        def test_generation_and_tab_do_not_reintroduce_entry_particles(self):
+            self.configure("timeout")
+            session = self.session("// 当前路径")
+            session.wait_for("pwd")
+            session.send(b"\t")
+            session.wait_screen(lambda screen: len(set(re.findall("[" + LOADING_FRAMES + "]", session.log.decode(errors="replace")))) >= 2)
+            self.assertIn(session.screen.display[0][0], LOADING_FRAMES)
+            self.assertEqual(session.screen.display[0][1:], " 当前路径")
+            self.assertFalse(any(0x2800 <= ord(c) <= 0x28ff for c in session.screen.display[0][1:] + "".join(session.screen.display[1:])))
+            self.assertTrue(all(c in LOADING_FRAMES for c in session.log.decode(errors="replace") if 0x2800 <= ord(c) <= 0x28ff))
+            session.send(b"\x03")
+            self.assertEqual(session.result(), (20, ""))
+            self.assertTrue(all(not line for line in session.screen.display))
+
+        def test_entry_animation_preserves_long_input_and_narrow_splits(self):
+            session = self.session("// " + "x" * 70)
+            session.wait_screen(lambda screen: screen.display[0] == "❯ " + "x" * 70)
+            self.assertEqual(session.screen.x, 72)
+            self.assertFalse(any(0x2800 <= ord(c) <= 0x28ff for c in "".join(session.screen.display)))
+            fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 24, 0, 0))
+            session.send(b"\x01\x05")
+            session.wait_screen(lambda screen: screen.columns == 24 and screen.y > 0 and screen.x < 23)
+            self.assertFalse(any(0x2800 <= ord(c) <= 0x28ff for c in "".join(session.screen.display)))
+            session.send(b"\x1b")
+            self.assertEqual(session.result(), (20, "// " + "x" * 70))
+            self.assertTrue(all(not line for line in session.screen.display))
+
+        def test_entry_reveal_yields_to_chinese_paste_and_accepts_only_command(self):
+            session = self.session()
+            session.wait_screen(lambda screen: "What do you need?" in screen.display[0])
+            session.send("\x1b[200~创建 hello.txt 文件\x1b[201~")
+            session.wait_for("touch")
+            self.assertEqual(session.screen.display[0], "❯ 创建 hello.txt 文件")
+            self.assertFalse(any(0x2800 <= ord(c) <= 0x28ff for c in "".join(session.screen.display)))
+            session.send(b"\r")
+            self.assertEqual(session.result(), (0, "touch './hello.txt'"))
+            self.assertFalse(self.directory.joinpath("hello.txt").exists())
+            self.assertEqual(termios.tcgetattr(session.master), session.original)
+
+        def test_cancel_during_entry_reveal_restores_terminal_without_dots(self):
+            session = self.session()
+            session.wait_screen(lambda screen: "What do you need?" in screen.display[0])
+            session.send(b"\x03")
+            self.assertEqual(session.result(), (20, ""))
+            self.assertTrue(all(not line for line in session.screen.display))
+            self.assertEqual(termios.tcgetattr(session.master), session.original)
+
+        def test_queued_entry_reveal_survives_split_resize_without_wrap(self):
+            session = self.session()
+            session.wait_screen(lambda screen: "What do you need?" in screen.display[0])
+            # A frame measured for 80 columns can arrive after the split shrinks.
+            self.assertTrue(select.select([session.master], [], [], 1)[0])
+            fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 16, 0, 0))
+            session.wait_screen(lambda screen: screen.columns == 16 and screen.y == 0 and
+                                screen.x == 2 and screen.display[0] == "❯ What do you")
+            self.assertTrue(all(not line for line in session.screen.display[1:]))
+            session.send(b"\x03")
+            self.assertEqual(session.result(), (20, ""))
+            self.assertTrue(all(not line for line in session.screen.display))
+
+        def test_npm_spinner_rotates_without_moving_input_and_stops_on_edit(self):
             self.configure("timeout")
             count = len(Handler.requests)
             session = self.session("// 测试服务")
-            pulse = rb"\x1b\[(?:2|1|22)m" + re.escape("❯".encode())
-            session.wait_screen(lambda screen: bool(re.findall(pulse, session.log)))
+            session.wait_screen(lambda screen: screen.display[0] and screen.display[0][0] in LOADING_FRAMES)
             row = session.screen.y
-            first = re.findall(pulse, session.log)[-1]
-            session.wait_screen(lambda screen: re.findall(pulse, session.log)[-1] != first)
+            first = session.screen.display[row][0]
+            session.wait_screen(lambda screen: screen.display[row][0] in LOADING_FRAMES and screen.display[row][0] != first)
             self.assertEqual(session.screen.y, row)
+            self.assertEqual(session.screen.x, 10)
+            self.assertEqual(session.screen.display[row][1:], " 测试服务")
+            self.assertTrue(session.screen.cursor_visible)
+            self.assertEqual(session.screen.visible_cursor_moves, 0)
             self.assertNotIn("Enter accept", session.screen.display[row])
             self.assertEqual(len(Handler.requests), count + 1)
+            session.send("\x15当前路径")
+            session.wait_screen(lambda screen: screen.display[row] == "❯ 当前路径" and "pwd" in screen.display[row + 1])
+            self.assertEqual(session.screen.x, 10)
+            self.assertTrue(session.screen.cursor_visible)
+            self.assertEqual(session.screen.visible_cursor_moves, 0)
+            self.assertFalse(select.select([session.master], [], [], 0.16)[0], "spinner kept repainting after cancellation")
             session.send(b"\x03")
             self.assertEqual(session.result(), (20, ""))
             self.assertEqual(termios.tcgetattr(session.master), session.original)
+
+        def test_loading_ticks_leave_description_and_partial_command_untouched(self):
+            self.configure("slow")
+            session = self.session("// 测试服务")
+            session.wait_for("touch")
+            begin = len(session.log)
+            mutations = session.screen.text_mutations
+            session.wait_screen(lambda screen: len(set(re.findall("[" + LOADING_FRAMES + "]", session.log[begin:].decode(errors="replace")))) >= 3)
+            updates = session.log[begin:]
+            self.assertNotIn(b"\x1b[J", updates)
+            self.assertNotIn(b"\x1b[K", updates)
+            self.assertNotIn("测试服务".encode(), updates)
+            self.assertNotIn(b"touch", updates)
+            self.assertEqual(session.screen.text_mutations, mutations)
+            self.assertEqual(session.screen.display[0][1:], " 测试服务")
+            session.wait_screen(lambda screen: screen.display[0] == "❯ 测试服务" and "完整结果.txt" in "".join(screen.display[1:]))
+            self.assertEqual(session.screen.text_mutations, mutations, "stream completion blanked a stable text prefix")
+            self.assertTrue(session.screen.cursor_visible)
+            session.send(b"\x03")
+            self.assertEqual(session.result(), (20, ""))
+
+        def test_npm_spinner_restores_arrow_on_completion_and_failure(self):
+            self.configure("slow")
+            session = self.session("// 测试服务")
+            session.wait_screen(lambda screen: screen.display[0] and screen.display[0][0] in LOADING_FRAMES)
+            session.wait_screen(lambda screen: screen.display[0] == "❯ 测试服务" and "完整结果.txt" in "".join(screen.display[1:]))
+            self.assertEqual(session.screen.x, 10)
+            self.assertFalse(select.select([session.master], [], [], 0.16)[0])
+            session.send(b"\x03")
+            self.assertEqual(session.result(), (20, ""))
+            self.configure("auth")
+            failed = self.session("// 测试服务")
+            failed.wait_for("Authentication failed")
+            self.assertEqual(failed.screen.display[0], "❯ 测试服务")
+            self.assertFalse(select.select([failed.master], [], [], 0.16)[0])
+            failed.send(b"\x03")
+            self.assertEqual(failed.result(), (20, ""))
 
         def test_enter_accepts_and_persists_only_after_confirmation(self):
             session = self.session("// 创建 hello.txt 文件")
@@ -990,7 +1160,7 @@ if os.name != "nt":
             session = self.session("// 当前路径")
             session.wait_for("pwd")
             session.send(b"\t")
-            session.wait_for("m❯")
+            session.wait_screen(lambda screen: screen.display[0] and screen.display[0][0] in LOADING_FRAMES)
             self.assertEqual(self.run_cli("llm", "cloud").returncode, 0)
             session.send(b"\t")
             # Allow reload to discard the old request before requesting an
@@ -1003,6 +1173,20 @@ if os.name != "nt":
             self.assertEqual(self.run_cli("suggest", "--shell", "zsh", "--intent", "当前路径").stdout.strip(), "printf '%s\\n' '你好'")
             self.assertEqual(self.run_cli("llm", "local").returncode, 0)
             self.assertEqual(self.run_cli("suggest", "--shell", "zsh", "--intent", "当前路径").stdout.strip(), "pwd")
+
+        def test_native_update_command_and_flag_completion(self):
+            for binary, flags, shell, prompt in self.supported_shells():
+                with self.subTest(shell=shell):
+                    session = self.start_shell(binary, flags, shell, prompt)
+                    time.sleep(0.1)
+                    session.send('export PATH="${SHELL_BUDDY_BIN%/*}:$PATH"\n')
+                    session.wait_for("READY> ")
+                    session.send("shell-buddy up\t --he\t\n")
+                    session.wait_for("READY> ")
+                    session.send("exit\n")
+                    code, stdout = session.result()
+                    self.assertEqual(code, 0, session.log.decode(errors="replace"))
+                    self.assertIn("--no-font", stdout)
 
         def test_native_tab_completion_has_descriptions_and_inserts_only_names(self):
             self.assertEqual(self.run_cli("start").returncode, 0)
@@ -1073,8 +1257,11 @@ if os.name != "nt":
                     self.assertEqual(session.screen.display[row - 1], "PROJECT")
                     session.send("创建 hello.txt 文件")
                     session.wait_for("touch")
+                    # A PTY read can end mid-frame; the editor restores the
+                    # caret before making it visible again.
+                    session.wait_screen(lambda screen: screen.cursor_visible)
                     self.assertEqual(session.screen.y, row, session.screen.display)
-                    self.assertTrue(session.screen.display[row].startswith("❯  创建 hello.txt 文件"), session.screen.display)
+                    self.assertTrue(session.screen.display[row].startswith("❯ 创建 hello.txt 文件"), session.screen.display)
                     self.assertIn("touch './hello.txt'", session.screen.display[row + 1])
                     session.send(b"\r")
                     session.wait_for("touch './hello.txt'")
@@ -1091,6 +1278,7 @@ if os.name != "nt":
                     session.wait_for("What do you need?")
                     session.send("你好")
                     session.wait_for("Model not configured")
+                    session.wait_screen(lambda screen: screen.cursor_visible)
                     self.assertEqual(session.screen.y, row)
                     session.send(b"\x1b")
                     session.wait_for("\x1b[?2004l")
@@ -1108,11 +1296,11 @@ if os.name != "nt":
                         session.wait_screen(lambda screen: screen.display[screen.y] == native.rstrip())
                         row = session.screen.y
                         session.send("//")
-                        session.wait_screen(lambda screen: screen.display[row] == "❯  What do you need?")
+                        session.wait_screen(lambda screen: screen.display[row] == "❯ What do you need?")
                         self.assertEqual(session.screen.y, row)
                         session.send("当前路径")
                         session.wait_for("pwd")
-                        self.assertEqual(session.screen.display[row], "❯  当前路径")
+                        self.assertEqual(session.screen.display[row], "❯ 当前路径")
                         session.send(b"\r")
                         session.wait_screen(lambda screen: screen.display[row] == native + "pwd")
                         self.assertFalse(any("Tab another" in line for line in session.screen.display[row+1:]))
@@ -1133,7 +1321,7 @@ if os.name != "nt":
             description = "创建 hello.txt 文件"
             session.send("\x1b[200~" + description + "\x1b[201~")
             session.wait_screen(lambda screen: screen.columns == 18 and screen.y > 0 and "touch" in screen.display[screen.y+1])
-            self.assertTrue(session.screen.display[0].startswith("\U000f5003❯  "), session.screen.display)
+            self.assertTrue(session.screen.display[0].startswith("\U000f5003❯ "), session.screen.display)
             self.assertTrue(session.screen.display[session.screen.y].endswith("\U000f5006"), session.screen.display)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "touch './hello.txt'"))
@@ -1150,9 +1338,9 @@ if os.name != "nt":
                     session.send("\x1b[200~// " + description + "\x1b[201~")
                     session.wait_for("描述")
                     session.send(b"\r")
-                    session.wait_screen(lambda screen: screen.y > row and screen.display[row].startswith("❯  "))
+                    session.wait_screen(lambda screen: screen.y > row and screen.display[row].startswith("❯ "))
                     self.assertGreater(session.screen.y, row, session.screen.display)
-                    self.assertTrue(session.screen.display[row].startswith("❯  "), session.screen.display)
+                    self.assertTrue(session.screen.display[row].startswith("❯ "), session.screen.display)
                     self.assertIn("很长的描述", session.screen.display[row + 1])
                     session.send(b"\x03")
                     session.wait_for("READY> ")
@@ -1260,8 +1448,8 @@ if os.name != "nt":
             # consuming it. Painted padding must not wrap into five extra rows.
             self.assertTrue(select.select([session.master], [], [], 1)[0])
             fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 16, 0, 0))
-            session.wait_screen(lambda screen: screen.columns == 16 and screen.y == 0 and screen.display[0] == "❯  x")
-            self.assertEqual(session.screen.x, 4)
+            session.wait_screen(lambda screen: screen.columns == 16 and screen.y == 0 and screen.display[0] == "❯ x")
+            self.assertEqual(session.screen.x, 3)
             session.send(b"\x03")
             self.assertEqual(session.result(), (20, ""))
             self.assertTrue(all(not line for line in session.screen.display))
@@ -1271,13 +1459,13 @@ if os.name != "nt":
             session.wait_for("当前路径你")
             fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 16, 0, 0))
             session.send(b"\x7f")
-            session.wait_screen(lambda screen: screen.columns == 16 and screen.display[screen.y] == "❯  当前路径" and screen.x == 11)
-            self.assertEqual(session.screen.x, 11)
+            session.wait_screen(lambda screen: screen.columns == 16 and screen.display[screen.y] == "❯ 当前路径" and screen.x == 10)
+            self.assertEqual(session.screen.x, 10)
             fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
             # The compact line already fits at 16 columns, so resizing alone
             # need not emit an identical frame. Exercise cursor movement too.
             session.send(b"\x01\x05")
-            session.wait_screen(lambda screen: screen.columns == 80 and "pwd" in screen.display[screen.y + 1] and screen.x == 11)
+            session.wait_screen(lambda screen: screen.columns == 80 and "pwd" in screen.display[screen.y + 1] and screen.x == 10)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
 
@@ -1290,8 +1478,8 @@ if os.name != "nt":
             session.wait_screen(lambda screen: screen.columns == 24 and screen.y > 0 and "touch" in screen.display[screen.y + 1])
             cursor_row = session.screen.y
             self.assertGreater(cursor_row, 0, session.screen.display)
-            self.assertTrue(session.screen.display[0].startswith("❯  创建"), session.screen.display)
-            candidate = "".join(line[3:] for line in session.screen.display[cursor_row + 1:] if line)
+            self.assertTrue(session.screen.display[0].startswith("❯ 创建"), session.screen.display)
+            candidate = "".join(line[2:] for line in session.screen.display[cursor_row + 1:] if line)
             self.assertEqual(candidate, "touch './very-long-filename-for-split.txt'")
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "touch './very-long-filename-for-split.txt'"))
@@ -1307,9 +1495,9 @@ if os.name != "nt":
             session.wait_screen(lambda screen: screen.columns == 16 and screen.y > 0 and any("Model" in line for line in screen.display))
             self.assertLess(session.screen.y, 5)
             session.send(b"\x01")
-            session.wait_screen(lambda screen: screen.x == 3 and screen.y == 0 and screen.display[0].startswith("❯  很长"))
+            session.wait_screen(lambda screen: screen.x == 2 and screen.y == 0 and screen.display[0].startswith("❯ 很长"))
             session.send("新")
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  新很长") and screen.x == 5)
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ 新很长") and screen.x == 4)
             session.send(b"\x1b")
             self.assertEqual(session.result(), (20, "// 新" + description))
             self.assertTrue(all(not line for line in session.screen.display))
@@ -1321,9 +1509,9 @@ if os.name != "nt":
                 fcntl.ioctl(session.master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, columns, 0, 0))
                 session.send(b"\x01\x05")
                 session.wait_screen(lambda screen: screen.columns == columns and screen.y == cursor_row and "touch" in screen.display[screen.y + 1])
-                candidate = "".join(line[3:] for line in session.screen.display[session.screen.y + 1:] if line and "Tab another" not in line)
+                candidate = "".join(line[2:] for line in session.screen.display[session.screen.y + 1:] if line and "Tab another" not in line)
                 self.assertEqual(candidate, "touch './split-window-long-name.txt'", session.screen.display)
-            self.assertEqual(session.screen.display[0], "❯  创建 split-window-long-name.txt 文件")
+            self.assertEqual(session.screen.display[0], "❯ 创建 split-window-long-name.txt 文件")
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "touch './split-window-long-name.txt'"))
             self.assertTrue(all(not line for line in session.screen.display))
@@ -1335,30 +1523,29 @@ if os.name != "nt":
                     session.send("printf '\\n%.0s' {1..30} >&2\n")
                     session.wait_screen(lambda screen: screen.y == 23 and screen.display[-1] == "READY>")
                     session.send("//当前路径")
-                    session.wait_screen(lambda screen: any("pwd" in line for line in screen.display) and "❯  当前路径" in screen.display[screen.y])
+                    session.wait_screen(lambda screen: any("pwd" in line for line in screen.display) and "❯ 当前路径" in screen.display[screen.y])
                     row = session.screen.y
-                    self.assertEqual(session.screen.display[row], "❯  当前路径")
-                    self.assertEqual(session.screen.display[row + 1], "   pwd")
+                    self.assertEqual(session.screen.display[row], "❯ 当前路径")
+                    self.assertEqual(session.screen.display[row + 1], "  pwd")
                     session.send(b"\r")
                     session.wait_screen(lambda screen: screen.display[screen.y] == "READY> pwd")
                     self.assertTrue(all(not line for line in session.screen.display[session.screen.y + 1:]))
                     session.send(b"\x15exit\n")
                     self.assertEqual(session.result()[0], 0)
 
-        def test_tab_clears_candidate_pulses_once_and_blocks_hidden_acceptance(self):
+        def test_tab_clears_candidate_spins_and_blocks_hidden_acceptance(self):
             self.configure("slow")
             session = self.session("// 当前路径")
             session.wait_for("pwd")
             row, column = session.screen.y, session.screen.x
             requests = len(Handler.requests)
             session.send(b"\t")
-            pulse = rb"\x1b\[(?:2|1|22)m" + re.escape("❯".encode())
-            session.wait_screen(lambda screen: screen.display[row].startswith("❯  ") and all(not line for line in screen.display[row + 1:]))
+            session.wait_screen(lambda screen: is_ai_prompt(screen.display[row]) and all(not line for line in screen.display[row + 1:]))
             self.assertEqual((session.screen.y, session.screen.x), (row, column))
             # Both acceptance keys must ignore the now-hidden previous candidate.
             session.send(b"\r\x1b[13;5u")
-            session.wait_screen(lambda screen: "完整结果.txt" in "".join(screen.display[row + 1:]) and screen.display[row].startswith("❯  "))
-            frames = set(re.findall(pulse, session.log))
+            session.wait_screen(lambda screen: "完整结果.txt" in "".join(screen.display[row + 1:]) and screen.display[row].startswith("❯ "))
+            frames = set(re.findall("[" + LOADING_FRAMES + "]", session.log.decode(errors="replace")))
             self.assertGreaterEqual(len(frames), 2)
             self.assertEqual(len(Handler.requests), requests + 1)
             session.send(b"\r")
@@ -1371,7 +1558,7 @@ if os.name != "nt":
             session.wait_for("pwd")
             requests = len(Handler.requests)
             session.send(b"\t\t\t")
-            session.wait_screen(lambda screen: "完整结果.txt" in "".join(screen.display) and screen.display[screen.y].startswith("❯  "))
+            session.wait_screen(lambda screen: "完整结果.txt" in "".join(screen.display) and screen.display[screen.y].startswith("❯ "))
             self.assertEqual(len(Handler.requests), requests + 1)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "touch '完整结果.txt'"))
@@ -1380,8 +1567,8 @@ if os.name != "nt":
             session = self.session("// 当前路径")
             session.wait_for("pwd")
             session.send(b"\t")
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and all(not line for line in screen.display[1:]))
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and "pwd" in screen.display[1] and any("Configure a model" in line for line in screen.display))
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and all(not line for line in screen.display[1:]))
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and "pwd" in screen.display[1] and any("Configure a model" in line for line in screen.display))
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
 
@@ -1390,8 +1577,8 @@ if os.name != "nt":
             session = self.session("// 当前路径")
             session.wait_for("pwd")
             session.send(b"\t")
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and all(not line for line in screen.display[1:]))
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and "pwd" in screen.display[1] and any("Authentication failed" in line for line in screen.display))
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and all(not line for line in screen.display[1:]))
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and "pwd" in screen.display[1] and any("Authentication failed" in line for line in screen.display))
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "pwd"))
 
@@ -1400,11 +1587,11 @@ if os.name != "nt":
             session = self.session("// 当前路径")
             session.wait_for("pwd")
             session.send(b"\t")
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and "printf" in screen.display[1])
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and "printf" in screen.display[1])
             requests = len(Handler.requests)
             session.send(b"\t")
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and all(not line for line in screen.display[1:]))
-            session.wait_screen(lambda screen: screen.display[0].startswith("❯  ") and any("No alternative candidate" in line for line in screen.display))
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and all(not line for line in screen.display[1:]))
+            session.wait_screen(lambda screen: screen.display[0].startswith("❯ ") and any("No alternative candidate" in line for line in screen.display))
             self.assertEqual(len(Handler.requests), requests + 1)
             session.send(b"\r")
             self.assertEqual(session.result(), (0, "printf '%s\\n' '你好'"))

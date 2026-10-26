@@ -30,7 +30,7 @@ The installer detects your OS and architecture and verifies the download with SH
 
 Supports **Zsh 5.8+**, **Bash 5+**, and **PowerShell 7.4+** with PSReadLine 2.3.6+. macOS's bundled Bash 3.2 is unsupported; its default Zsh works out of the box.
 
-Download **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)** for macOS (Apple Silicon / Intel), Linux x86_64, or Windows x86_64. Bundles include the executable, mascot font, and installer. [Prebuilt installation →](docs/install.md#from-a-published-release)
+Download **[v0.2.1](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.1)** for macOS (Apple Silicon / Intel), Linux x86_64, or Windows x86_64. Bundles include the executable, mascot font, and installer. [Prebuilt installation →](docs/install.md#from-a-published-release)
 
 Enable Shell Buddy in your current session:
 
@@ -50,13 +50,24 @@ The wizard downloads nothing. Local rules for creating files and directories, li
 
 For persistence, add the initialization command to your shell startup file using an absolute binary path. The installers do not edit startup files or terminal settings. [Installation and supported platforms →](docs/install.md)
 
+## Update
+
+```sh
+shell-buddy update          # Install the latest stable release
+shell-buddy update --check  # Check without changing files
+```
+
+The updater verifies SHA-256 before replacing the running executable and refreshes the bundled symbol font. Configuration and credentials are preserved. Use `--no-font` to skip the font, then reload your shell integration in existing sessions. [Upgrade details →](docs/install.md#upgrade-or-remove)
+
+Available in v0.2.1+. If upgrading from v0.2.0, run the installer once; subsequent upgrades can use `shell-buddy update`.
+
 ## At your fingertips
 
 Only input beginning with `//` activates Shell Buddy. Your description stays above the suggestion; both wrap to fit split panes.
 
 | Key | Action |
 | --- | --- |
-| Tab | Show another suggestion, with a short brightness pulse on the prompt |
+| Tab | Show another suggestion |
 | Enter | Put the complete command on your command line for review or editing |
 | Enter again | Execute through your shell |
 | Cmd+Enter on macOS / Ctrl+Enter on Windows and Linux | Accept and execute, with [terminal key configuration](examples/terminal-keys.md) |
@@ -67,7 +78,9 @@ Incomplete streams and hidden old suggestions cannot be accepted. If a Tab refre
 
 ## AI input
 
-Typing `//` temporarily hands the current input row to Shell Buddy: one gold `❯`, a subtle background, and an empty-input placeholder that disappears as you type. Generation and Tab refresh pulse the prompt without adding another icon. A complete command reveals the acceptance hint. Accepting or canceling restores your original shell prompt; context above a multiline prompt stays visible.
+Typing `//` temporarily hands the current input row to Shell Buddy: one gold `❯`, a subtle background, and an empty-input placeholder that disappears as you type. During model generation, the arrow becomes an npm-style gold dot spinner in the same one-cell position. Completion, failure, or cancellation restores the arrow. The caret stays hidden during entry and reappears immediately when you type. A complete command reveals the acceptance hint. Accepting or canceling restores your original shell prompt; context above a multiline prompt stays visible.
+
+On entry, the background expands from left to right over 720ms. A bright, moving particle core, larger sparks and fading trails overlap its front, briefly gathering and bursting before settling. Once expansion finishes, every particle disappears and the full-width plain background remains. Typing, pasting, or resizing completes the animation immediately; generation and Tab refresh do not bring the particles back.
 
 The default `"input_style": "square"` needs no extra font. Configure **Shell Buddy Icons 1.1+**, then select `rounded` in `shell-buddy init`, or set `"input_style": "rounded"` and run `restart`. Legacy `icon` and `nerd_font` settings no longer add an icon. [Rounded font setup →](fonts/README.md)
 
@@ -91,6 +104,7 @@ Configuration defaults to `~/.config/shell-buddy/`. The wizard saves keys separa
 | `shell-buddy start` / `stop` | Enable suggestions, or disable them and cancel generation |
 | `shell-buddy restart` | Validate and reload configuration, then enable suggestions |
 | `shell-buddy status` | Show state and configuration path |
+| `shell-buddy update` | Upgrade the executable and bundled symbol font |
 | `shell-buddy cache-clear` | Remove accepted-command cache |
 
 No background service is required. State changes apply across terminals sharing the same configuration directory.
@@ -124,11 +138,17 @@ Run the checks:
 ```sh
 zig build -Doptimize=small
 zig build test
+zig build build-update-tests -Doptimize=small
+python3 tests/update.py
 python3 tests/integration.py
 python3 tests/benchmark.py
 python3 tests/release.py
 ```
 
 The binary is written to `zig-out/bin/`. Integration tests use local mock servers and pseudo terminals, without real credentials. Native Windows PowerShell checks live in `tests/windows_terminal.py`; [CI](.github/workflows/ci.yml) defines the platform checks.
+
+## License
+
+[MIT](LICENSE). Copyright © 2026 Liang Zhanbo (梁展波), founder of Nuclx Tech. Copyright is held personally by the author.
 
 [Reference](docs/reference.md) · [Installation](docs/install.md) · [Brand and mascot](docs/brand/README.md) · [简体中文](README.zh-CN.md)

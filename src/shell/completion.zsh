@@ -11,6 +11,7 @@ function _shell_buddy_complete() {
     'stop:Disable suggestions and cancel active requests'
     'restart:Reload configuration and enable suggestions'
     'status:Show state and configuration path'
+    'update:Upgrade to the latest stable release'
     'llm:Select an LLM profile'
     'suggest:Print a suggestion without executing it'
     'edit:Open the inline editor'
@@ -34,6 +35,11 @@ function _shell_buddy_complete() {
     _describe 'shell' shells
   else
     case $words[2] in
+      update)
+        local -a words=("${words[@]:1}")
+        local CURRENT=$(( CURRENT - 1 ))
+        _arguments '--check[Check for updates without changing files]' '--no-font[Skip updating the bundled symbol font]' '--help[Show command help]'
+        ;;
       suggest)
         _arguments '--shell[Select the target shell]:shell:((bash zsh powershell))' '--intent[Describe the command]:description:' '--generate[Request the selected model]' '--timings[Print model latency]' '--help[Show command help]'
         ;;

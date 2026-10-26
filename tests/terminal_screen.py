@@ -10,6 +10,9 @@ class Screen:
         self.x = self.y = 0
         self.saved = (0, 0)
         self.wrap = False
+        self.cursor_visible = True
+        self.visible_cursor_moves = 0
+        self.text_mutations = 0
         self.sequence = ""
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
 
@@ -32,9 +35,14 @@ class Screen:
         else:
             self.y += 1
 
+    def clear_range(self, row, start, end):
+        self.text_mutations += sum(any(c.isalnum() for c in cell) for cell in self.cells[row][start:end])
+        self.cells[row][start:end] = [" "] * (end - start)
+
     def feed(self, data):
         responses = bytearray()
         for char in self.decoder.decode(data):
+            before = self.x, self.y
             if self.sequence:
                 self.sequence += char
                 if self.sequence.startswith("\x1b]"):
@@ -52,6 +60,8 @@ class Screen:
                     elif char == "D":
                         self.newline()
                     self.sequence = "" if char not in "[]" else self.sequence
+                if self.cursor_visible and (self.x, self.y) != before:
+                    self.visible_cursor_moves += 1
                 continue
             if char == "\x1b":
                 self.sequence = char
@@ -73,15 +83,24 @@ class Screen:
                 if self.wrap or self.x + width > self.columns:
                     self.newline()
                     self.x, self.wrap = 0, False
+                old = self.cells[self.y][self.x]
+                if old != char and any(c.isalnum() for c in old):
+                    self.text_mutations += 1
                 self.cells[self.y][self.x] = char
                 if width == 2:
                     self.cells[self.y][self.x + 1] = ""
                 self.x += width
                 if self.x >= self.columns:
                     self.x, self.wrap = self.columns - 1, True
+            if self.cursor_visible and (self.x, self.y) != before:
+                self.visible_cursor_moves += 1
         return bytes(responses)
 
     def csi(self, arguments, command):
+        if arguments == "?25":
+            if command in "hl":
+                self.cursor_visible = command == "h"
+            return b""
         if arguments.startswith(("?", ">", "!")):
             return b""
         try:
@@ -111,14 +130,18 @@ class Screen:
             self.y = min(self.rows - 1, count - 1)
         elif command == "K":
             start, end = (0, self.columns) if value == 2 else ((0, self.x + 1) if value == 1 else (self.x, self.columns))
-            self.cells[self.y][start:end] = [" "] * (end - start)
+            self.clear_range(self.y, start, end)
         elif command == "J":
             if value == 2:
-                self.cells = [[" "] * self.columns for _ in range(self.rows)]
+                for row in range(self.rows):
+                    self.clear_range(row, 0, self.columns)
             elif value == 0:
-                self.cells[self.y][self.x:] = [" "] * (self.columns - self.x)
+                self.clear_range(self.y, self.x, self.columns)
                 for row in range(self.y + 1, self.rows):
-                    self.cells[row] = [" "] * self.columns
+                    self.clear_range(row, 0, self.columns)
+        elif command == "X":
+            end = min(self.columns, self.x + count)
+            self.clear_range(self.y, self.x, end)
         elif command == "P":
             row = self.cells[self.y]
             self.cells[self.y] = (row[:self.x] + row[self.x + count:] + [" "] * count)[:self.columns]

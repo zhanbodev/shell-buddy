@@ -115,7 +115,7 @@ pub const Terminal = struct {
         }
     }
     pub fn close(self: *Terminal) void {
-        self.write("\x1b[0m\x1b[?2004l") catch {};
+        self.write("\x1b[?25l\x1b[0m\x1b[?2004l") catch {};
         if (self.inline_saved and self.inline_column == null) {
             self.write("\x1b8") catch {};
         } else {
@@ -133,6 +133,7 @@ pub const Terminal = struct {
                 if (self.restore_column > 0) self.write(std.fmt.bufPrint(&buffer, "\x1b[{d}C", .{self.restore_column}) catch "") catch {};
             }
         }
+        self.write("\x1b[?25h") catch {};
         if (windows) {
             _ = Win.SetConsoleMode(self.input.handle, self.original);
             _ = Win.SetConsoleMode(self.output.handle, self.original_output);

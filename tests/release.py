@@ -65,6 +65,7 @@ class Release(unittest.TestCase):
         meta = json.loads(self.bundle.joinpath('release.json').read_text())
         self.assertEqual(meta['default_input_style'],'square')
         self.assertTrue(self.bundle.joinpath('fonts/ShellBuddyIcons.ttf').is_file())
+        self.assertEqual(self.bundle.joinpath('LICENSE').read_bytes(), ROOT.joinpath('LICENSE').read_bytes())
         self.assertFalse(any(self.bundle.rglob('credentials.json')))
         self.assertFalse(any(self.bundle.rglob('config.json')))
 

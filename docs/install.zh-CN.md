@@ -2,7 +2,7 @@
 
 [English](install.md) · [项目首页](../README.zh-CN.md)
 
-可安装预编译的 [v0.2.0 发布包](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)，也可使用 Zig 0.17.0 从源码构建。
+可安装预编译的 [v0.2.1 发布包](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.1)，也可使用 Zig 0.17.0 从源码构建。
 
 ## 从当前源码安装
 
@@ -31,8 +31,8 @@ $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 macOS / Linux：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.sh -o /tmp/shell-buddy-install.sh
-sh /tmp/shell-buddy-install.sh --version v0.2.0
+curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.1/install.sh -o /tmp/shell-buddy-install.sh
+sh /tmp/shell-buddy-install.sh --version v0.2.1
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -40,8 +40,8 @@ Windows PowerShell 7.4+：
 
 ```powershell
 $installer = Join-Path ([IO.Path]::GetTempPath()) 'shell-buddy-install.ps1'
-Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.0/install.ps1 -OutFile $installer
-pwsh -File $installer -Version v0.2.0
+Invoke-WebRequest https://raw.githubusercontent.com/zhanbodev/shell-buddy/v0.2.1/install.ps1 -OutFile $installer
+pwsh -File $installer -Version v0.2.1
 $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 ```
 
@@ -71,7 +71,7 @@ $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 POSIX 安装器支持 `--bin-dir <目录>`、`--font-dir <目录>` 和 `--no-font`；使用下载器时放在 `--` 后面：
 
 ```sh
-sh /tmp/shell-buddy-install.sh --version v0.2.0 -- --bin-dir "$HOME/.local/bin" --no-font
+sh /tmp/shell-buddy-install.sh --version v0.2.1 -- --bin-dir "$HOME/.local/bin" --no-font
 ```
 
 PowerShell 对应参数为 `-BinDir`、`-FontDir`、`-NoFont`。本地安装器另提供 `-SkipFontRegistration`，仅复制字体文件而不写注册表。
@@ -98,6 +98,20 @@ v0.2.0 使用单个金色 `❯`，默认 `"input_style": "square"`，无需额�
 
 ## 更新与卸载
 
-更新时重新运行新版本安装器，然后在已有会话中重新加载 Shell 初始化命令；配置和凭据会保留。`shell-buddy restart` 用于校验并重新加载配置。
+```sh
+shell-buddy update          # 安装 GitHub 最新稳定版
+shell-buddy update --check  # 只检查，不写入文件
+shell-buddy update --no-font
+```
+
+使用 Zig 自带 HTTP/TLS 下载，对照 `SHA256SUMS` 校验压缩包，核对版本和平台，并运行暂存程序的 `--version` 后，替换当前调用的程序。无需 Zig、Python 或 curl，不降级、不安装预发布版本；每次下载超时为 30 秒。下载、校验、验证失败时保留原程序。
+
+支持自定义安装路径，但程序所在目录必须可写。旁边的 `.update.lock` 用来防止并发升级。Windows 会先把正在运行的程序重命名为 `.previous` 再替换；旧备份可能保留到进程退出，下次升级时清理。系统目录或包管理器安装且无写权限时，使用原安装方式更新。
+
+默认同时更新用户目录下的内置符号字体；`--no-font` 可跳过。字体更新失败会单独提示，不影响已经完成的程序升级。自定义字体目录、补丁版文字字体需要手动更新，终端字体设置不会被修改。
+
+保留配置、凭据、缓存、启用/停用状态、PATH 和 Shell 启动文件。升级后在已有会话中重新执行 Shell 初始化命令。`shell-buddy restart` 只校验/加载配置，不下载升级、不重新加载 Shell 绑定。
+
+`update` 从 v0.2.1 开始提供。v0.2.0 用户先运行一次安装脚本，之后即可使用此命令升级。
 
 卸载时删除安装的程序、移除自己添加的 PATH/初始化配置，并通过系统字体管理器移除 **Shell Buddy Icons**。只有希望同时删除配置、凭据和缓存时，才另外移除 `~/.config/shell-buddy`。
