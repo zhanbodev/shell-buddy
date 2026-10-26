@@ -208,15 +208,43 @@ fn replaceExecutable(ctx: Context, candidate: []const u8) !void {
         error.FileNotFound => {},
         else => return err,
     };
-    try Io.Dir.renamePreserve(cwd(), ctx.executable, cwd(), backup, io);
-    Io.Dir.renamePreserve(cwd(), candidate, cwd(), ctx.executable, io) catch |err| {
-        Io.Dir.renamePreserve(cwd(), backup, cwd(), ctx.executable, io) catch {
+    try renameWindowsPreserve(ctx.a, ctx.executable, backup);
+    renameWindowsPreserve(ctx.a, candidate, ctx.executable) catch |err| {
+        renameWindowsPreserve(ctx.a, backup, ctx.executable) catch {
             try say(ctx, "Recovery executable: {s}\n", .{backup});
             return error.UpdateRollbackFailed;
         };
         return err;
     };
     cwd().deleteFile(io, backup) catch {}; // A mapped image may remain until this process exits.
+}
+
+fn renameWindowsPreserve(a: Allocator, from: []const u8, to: []const u8) !void {
+    const W = struct {
+        extern "kernel32" fn MoveFileExW([*:0]const u16, [*:0]const u16, u32) callconv(.winapi) i32;
+    };
+    const old = try std.unicode.wtf8ToWtf16LeAllocZ(a, from);
+    defer a.free(old);
+    const new = try std.unicode.wtf8ToWtf16LeAllocZ(a, to);
+    defer a.free(new);
+    for (old) |*c| if (c.* == '/') {
+        c.* = '\\';
+    };
+    for (new) |*c| if (c.* == '/') {
+        c.* = '\\';
+    };
+    // Zig 0.17's generic rename opens the source with GENERIC_WRITE, which
+    // fails for the running image. MoveFileExW can rename it without requesting
+    // write access. Zero flags preserve existing destinations and forbid copies.
+    if (W.MoveFileExW(old, new, 0) != 0) return;
+    return switch (std.os.windows.GetLastError()) {
+        .FILE_NOT_FOUND, .PATH_NOT_FOUND => error.FileNotFound,
+        .ACCESS_DENIED => error.AccessDenied,
+        .SHARING_VIOLATION, .LOCK_VIOLATION => error.FileBusy,
+        .FILE_EXISTS, .ALREADY_EXISTS => error.PathAlreadyExists,
+        .NOT_SAME_DEVICE => error.CrossDevice,
+        else => error.Unexpected,
+    };
 }
 
 fn fontPath(a: Allocator, env: *const std.process.Environ.Map) ![]const u8 {
