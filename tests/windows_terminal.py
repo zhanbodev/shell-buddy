@@ -130,6 +130,17 @@ $result | ConvertTo-Json -Depth 5 -Compress
                 pass
         self.fail(f"Did not receive {text!r}: {self.log[-3000:]!r}")
 
+    def wait_until(self, predicate, description, timeout=8):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            try:
+                self.log += self.messages.get(timeout=0.05)
+            except queue.Empty:
+                pass
+        self.fail(f"{description}: {self.log[-3000:]!r}")
+
     def test_enter_fills_line_then_second_enter_executes(self):
         process = self.start_shell()
         # Wait for the child editor to own console input before typing the intent.
@@ -139,10 +150,14 @@ $result | ConvertTo-Json -Depth 5 -Compress
         self.wait_for("New-Item")
         self.assertIn("❯", re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", self.log))
         process.write("\r")
+        # Accepting restores the native prompt too. Consume that repaint before
+        # sending Enter again, rather than mistaking it for command completion.
+        self.wait_for("READY>")
         time.sleep(0.2)
         self.assertFalse(self.directory.joinpath("hello.txt").exists())
         process.write("\r")
-        self.wait_for("READY>")
+        self.wait_until(lambda: self.directory.joinpath("hello.txt").exists(),
+                        "Second Enter did not execute the accepted command")
         self.assertTrue(self.directory.joinpath("hello.txt").exists())
 
     def test_modified_enter_changes_current_powershell_directory(self):
