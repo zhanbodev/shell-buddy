@@ -19,25 +19,18 @@
 
 ## 开始使用
 
-支持 **Zsh 5.8+**、**Bash 5+**，以及配合 PSReadLine 2.3.6+ 的 **PowerShell 7.4+**。macOS 自带的 Bash 3.2 不受支持，默认 Zsh 可直接使用。
-
-下载 **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)**，支持 macOS（Apple Silicon / Intel）、Linux x86_64 和 Windows x86_64，发布包包含程序、吉祥物字体和安装器。[预编译包安装 →](docs/install.zh-CN.md#从公开发布包安装)
-
-从当前源码构建安装，需要 Zig 0.17.0：
+**macOS / Linux 一行安装最新版**，程序和字体一起安装：
 
 ```sh
-zig build -Doptimize=small
-sh scripts/install-local.sh
+curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/main/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Windows：
+脚本会自动识别系统和架构，并校验下载包的 SHA-256，无需安装 Zig。
 
-```powershell
-zig build -Doptimize=small
-pwsh -File .\scripts\install-local.ps1
-$env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
-```
+支持 **Zsh 5.8+**、**Bash 5+**，以及配合 PSReadLine 2.3.6+ 的 **PowerShell 7.4+**。macOS 自带的 Bash 3.2 不受支持，默认 Zsh 可直接使用。
+
+下载 **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)**，支持 macOS（Apple Silicon / Intel）、Linux x86_64 和 Windows x86_64，发布包包含程序、吉祥物字体和安装器。[预编译包安装 →](docs/install.zh-CN.md#从公开发布包安装)
 
 在当前会话启用 Shell Buddy：
 
@@ -47,7 +40,7 @@ $env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
 | Bash | `eval "$(shell-buddy init bash)"` |
 | PowerShell | `shell-buddy init powershell \| Out-String \| Invoke-Expression` |
 
-然后配置接口地址、模型、隐藏输入的 API key 和图标偏好：
+然后配置接口地址、模型、隐藏输入的 API key 和输入样式：
 
 ```sh
 shell-buddy init
@@ -109,6 +102,24 @@ Shell Buddy 依次检查已确认命令缓存、明确意图规则，再调用�
 性能目标：二进制 **≤5 MiB**，编辑器峰值 RSS **≤20 MiB**，本地建议 p95 **≤30 ms**。这些是目标值，模型与网络耗时单独测量。[性能数据与平台验收状态 →](docs/reference.md#performance)
 
 ## 开发
+
+从当前源码构建安装，需要 **Zig 0.17.0**：
+
+```sh
+zig build -Doptimize=small
+sh scripts/install-local.sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Windows：
+
+```powershell
+zig build -Doptimize=small
+pwsh -File .\scripts\install-local.ps1
+$env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
+```
+
+运行检查：
 
 ```sh
 zig build -Doptimize=small

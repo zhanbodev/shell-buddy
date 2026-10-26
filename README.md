@@ -19,25 +19,18 @@ Type `//`, describe what you need, and get a command right below your input. Rev
 
 ## Get started
 
-Supports **Zsh 5.8+**, **Bash 5+**, and **PowerShell 7.4+** with PSReadLine 2.3.6+. macOS's bundled Bash 3.2 is unsupported; its default Zsh works out of the box.
-
-Download **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)** for macOS (Apple Silicon / Intel), Linux x86_64, or Windows x86_64. Bundles include the executable, mascot font, and installer. [Prebuilt installation →](docs/install.md#from-a-published-release)
-
-To build and install from this checkout with Zig 0.17.0:
+Install the latest release on **macOS / Linux**, including the bundled font:
 
 ```sh
-zig build -Doptimize=small
-sh scripts/install-local.sh
+curl -fsSL https://raw.githubusercontent.com/zhanbodev/shell-buddy/main/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-On Windows:
+The installer detects your OS and architecture and verifies the download with SHA-256. No Zig installation is required.
 
-```powershell
-zig build -Doptimize=small
-pwsh -File .\scripts\install-local.ps1
-$env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
-```
+Supports **Zsh 5.8+**, **Bash 5+**, and **PowerShell 7.4+** with PSReadLine 2.3.6+. macOS's bundled Bash 3.2 is unsupported; its default Zsh works out of the box.
+
+Download **[v0.2.0](https://github.com/zhanbodev/shell-buddy/releases/tag/v0.2.0)** for macOS (Apple Silicon / Intel), Linux x86_64, or Windows x86_64. Bundles include the executable, mascot font, and installer. [Prebuilt installation →](docs/install.md#from-a-published-release)
 
 Enable Shell Buddy in your current session:
 
@@ -109,6 +102,24 @@ Shell Buddy checks accepted-command cache, then explicit intent rules, then your
 Performance targets: binary **≤5 MiB**, editor peak RSS **≤20 MiB**, local suggestion p95 **≤30 ms**. These are targets; model and network latency are separate. [Measurements and platform status →](docs/reference.md#performance)
 
 ## Develop
+
+Build and install from this checkout with **Zig 0.17.0**:
+
+```sh
+zig build -Doptimize=small
+sh scripts/install-local.sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+On Windows:
+
+```powershell
+zig build -Doptimize=small
+pwsh -File .\scripts\install-local.ps1
+$env:PATH = "$env:LOCALAPPDATA\Programs\ShellBuddy\bin;$env:PATH"
+```
+
+Run the checks:
 
 ```sh
 zig build -Doptimize=small
